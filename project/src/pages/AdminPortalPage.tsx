@@ -30,6 +30,48 @@ export default function AdminPortalPage({
   const [showtimesList, setShowtimesList] = useState<Showtime[]>([]);
   const [ticketsList, setTicketsList] = useState<BookedTicket[]>([]);
 
+  // States for direct sales at counter
+  const [selectedSalesMovie, setSelectedSalesMovie] = useState<Movie | null>(null);
+  const [selectedSalesCinema, setSelectedSalesCinema] = useState<any>(cinemas[0] || null);
+  const [selectedSalesDate, setSelectedSalesDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [selectedSalesShowtime, setSelectedSalesShowtime] = useState<Showtime | null>(null);
+  const [salesSelectedSeats, setSalesSelectedSeats] = useState<string[]>([]);
+  const [salesCustomerName, setSalesCustomerName] = useState("");
+  const [salesCustomerPhone, setSalesCustomerPhone] = useState("");
+  const [salesPaymentMethod, setSalesPaymentMethod] = useState("cash");
+  const [printedTicket, setPrintedTicket] = useState<BookedTicket | null>(null);
+
+  // State for search and forms
+  const [searchTicketQuery, setSearchTicketQuery] = useState("");
+  const [searchTicketResult, setSearchTicketResult] = useState<BookedTicket | null>(null);
+  const [ticketSearchError, setTicketSearchError] = useState("");
+
+  // States for report filter (UC06)
+  const [reportType, setReportType] = useState<"date" | "cinema" | "movie">("date");
+  const [reportStartDate, setReportStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7); // Default to last 7 days
+    return d.toISOString().split("T")[0];
+  });
+  const [reportEndDate, setReportEndDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [reportData, setReportData] = useState<any[]>([]);
+  const [hasSearchedReport, setHasSearchedReport] = useState(false);
+
+  // Modals
+  const [showMovieModal, setShowMovieModal] = useState(false);
+  const [editingMovie, setEditingMovie] = useState<Movie | null>(null);
+  const [movieForm, setMovieForm] = useState<Partial<Movie>>({
+    title: "", titleVi: "", duration: 120, rating: "T16", score: 8.0, 
+    poster: "", backdrop: "", status: "now_showing", releaseDate: "", 
+    description: "", director: "", cast: [], language: "Phụ đề Tiếng Việt", genre: []
+  });
+
+  const [showShowtimeModal, setShowShowtimeModal] = useState(false);
+  const [showtimeForm, setShowtimeForm] = useState<Partial<Showtime>>({
+    movieId: 1, cinemaId: 1, date: new Date().toISOString().split("T")[0], 
+    time: "18:00", hall: "Hall 1", type: "standard", availableSeats: 100, totalSeats: 100
+  });
+
   // Concurrency Simulation States
   const [nonRepResults, setNonRepResults] = useState<{
     isActive: boolean;
@@ -264,48 +306,6 @@ export default function AdminPortalPage({
     setReportData(result);
     setHasSearchedReport(true);
   };
-
-  // States for direct sales at counter
-  const [selectedSalesMovie, setSelectedSalesMovie] = useState<Movie | null>(null);
-  const [selectedSalesCinema, setSelectedSalesCinema] = useState<any>(cinemas[0] || null);
-  const [selectedSalesDate, setSelectedSalesDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  const [selectedSalesShowtime, setSelectedSalesShowtime] = useState<Showtime | null>(null);
-  const [salesSelectedSeats, setSalesSelectedSeats] = useState<string[]>([]);
-  const [salesCustomerName, setSalesCustomerName] = useState("");
-  const [salesCustomerPhone, setSalesCustomerPhone] = useState("");
-  const [salesPaymentMethod, setSalesPaymentMethod] = useState("cash");
-  const [printedTicket, setPrintedTicket] = useState<BookedTicket | null>(null);
-
-  // State for search and forms
-  const [searchTicketQuery, setSearchTicketQuery] = useState("");
-  const [searchTicketResult, setSearchTicketResult] = useState<BookedTicket | null>(null);
-  const [ticketSearchError, setTicketSearchError] = useState("");
-
-  // States for report filter (UC06)
-  const [reportType, setReportType] = useState<"date" | "cinema" | "movie">("date");
-  const [reportStartDate, setReportStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7); // Default to last 7 days
-    return d.toISOString().split("T")[0];
-  });
-  const [reportEndDate, setReportEndDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [reportData, setReportData] = useState<any[]>([]);
-  const [hasSearchedReport, setHasSearchedReport] = useState(false);
-
-  // Modals
-  const [showMovieModal, setShowMovieModal] = useState(false);
-  const [editingMovie, setEditingMovie] = useState<Movie | null>(null);
-  const [movieForm, setMovieForm] = useState<Partial<Movie>>({
-    title: "", titleVi: "", duration: 120, rating: "T16", score: 8.0, 
-    poster: "", backdrop: "", status: "now_showing", releaseDate: "", 
-    description: "", director: "", cast: [], language: "Phụ đề Tiếng Việt", genre: []
-  });
-
-  const [showShowtimeModal, setShowShowtimeModal] = useState(false);
-  const [showtimeForm, setShowtimeForm] = useState<Partial<Showtime>>({
-    movieId: 1, cinemaId: 1, date: new Date().toISOString().split("T")[0], 
-    time: "18:00", hall: "Hall 1", type: "standard", availableSeats: 100, totalSeats: 100
-  });
 
   // Load database
   useEffect(() => {
