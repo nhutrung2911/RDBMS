@@ -1,0 +1,78 @@
+2.4. Mô tả Use Case
+2.4.1. Mô tả Use Case 1
+
+=== TABLE START ===
+Use Case ID | UC01
+Tên | Đăng nhập / Đăng ký / Quên mật khẩu
+Tác nhân | Khách hàng, Nhân viên rạp, Quản trị viên (Admin)
+Mô tả | Cho phép người dùng chưa có tài khoản thực hiện đăng ký thành viên mới; người dùng đã có tài khoản xác thực danh tính để truy cập hệ thống; hoặc khôi phục mật khẩu nếu bị quên
+Tiền điều kiện | Hệ thống đang hoạt động và người dùng truy cập vào ứng dụng/trang web.
+Hậu điều kiện | Người dùng đăng nhập thành công. Hoặc tài khoản mới được tạo. Hoặc mật khẩu mới được cấp lại thành công
+Luồng sự kiện chính | 1. Người dùng chọn chức năng "Đăng nhập" trên giao diện. 2. Hệ thống hiển thị biểu mẫu đăng nhập. 3. Người dùng nhập thông tin: Email và Mật khẩu, sau đó nhấn "Đăng nhập". 4. Hệ thống kiểm tra và xác thực thông tin đối chiếu với Cơ sở dữ liệu. 5. Hệ thống xác định quyền của tài khoản, thông báo thành công và chuyển hướng người dùng vào trang tương ứng
+Luồng sự kiện phụ | 2a. Đăng ký tài khoản mới: 2a1. Tại Bước 2, người dùng chọn "Đăng ký tài khoản". 2a2. Hệ thống hiển thị form đăng ký (Họ tên, SĐT, Email, Mật khẩu). 2a3. Người dùng nhập dữ liệu và nhấn "Đăng ký". 2a4. Hệ thống lưu tài khoản mới, báo thành công và quay lại Bước 2(Lỗi 2a4a: Nếu Email/SĐT bị trùng, hệ thống báo lỗi và yêu cầu nhập lại). 2b. Quên mật khẩu: 2b1. Tại Bước 2, người dùng chọn "Quên mật khẩu". 2b2. Người dùng nhập Email/SĐT để nhận mã OTP. 2b3. Người dùng nhập OTP và Mật khẩu mới, nhấn "Đổi mật khẩu". 2b4. Hệ thống cập nhật mật khẩu mới và báo thành công. 4a. Sai thông tin đăng nhập: 4a1. Tại Bước 4, nếu thông tin sai, hệ thống báo lỗi "Tên đăng nhập hoặc mật khẩu không chính xác". 4a2. Yêu cầu người dùng quay lại Bước 3 để nhập lại
+=== TABLE END ===
+
+2.4.2. Mô tả Use Case 2
+
+=== TABLE START ===
+Use Case ID | UC02
+Tên Use Case | Quản lý phim, rạp và lịch chiếu
+Tác nhân chính | Quản trị viên ( Admin )
+Mô tả | Cho phép Quản trị viên thêm mới, cập nhật, hoặc xóa thông tin về các bộ phim, cụm rạp, phòng chiếu và thiết lập lịch chiếu hiển thị trên hệ thống
+Tiền điều kiện | Admin đã đăng nhập hệ thống với quyền quản trị
+Hậu điều kiện | Thông tin mới về Phim, Rạp hoặc Lịch chiếu được lưu vào CSDL và tự động cập nhật hiển thị phía khách hàng
+Luồng sự kiện chính | 1. Admin truy cập module Quản lý (chọn Phim, Rạp hoặc Lịch chiếu). 2. Hệ thống hiển thị danh sách dữ liệu hiện tại. 3. Admin chọn thao tác: "thêm mới", "sửa" hoặc "xóa". 4. Hệ thống hiển thị biểu mẫu tương ứng để Admin thao tác. 5. Admin nhập dữ liệu (Ví dụ thêm lịch chiếu: chọn phim, chọn phòng chiếu, chọn giờ chiếu) và nhấn "Lưu". 6. Hệ thống kiểm tra tính hợp lệ của dữ liệu (kiểm tra thiếu thông tin hoặc trùng lịch chiếu). 7. Hệ thống lưu dữ liệu vào CSDL và thông báo "Cập nhật thành công"
+Luồng sự kiện phụ | 6a. Trùng lịch phòng chiếu (Khi thêm/sửa lịch chiếu): 6a1. Hệ thống phát hiện phòng chiếu đã có phim khác trong khung giờ vừa thiết lập. 6a2. Hệ thống báo lỗi "Khung giờ này phòng chiếu đã bận". 6a3. Admin phải điều chỉnh lại thời gian hoặc phòng chiếu. 6b. Xóa dữ liệu đang được sử dụng: 6b1. Admin xóa một bộ phim đang có lịch chiếu hoặc đã có vé đặt. 6b2. Hệ thống cảnh báo không thể xóa, chỉ cho phép chuyển trạng thái sang "Ngưng chiếu".
+=== TABLE END ===
+
+2.4.3. Mô tả Use Case 3
+
+=== TABLE START ===
+Use Case ID | UC03
+Tên Use Case | Xem thông tin phim và lịch chiếu
+Tác nhân chính | Khách hàng, nhân viên rạp
+Mô tả | Khách hàng và nhân viên tra cứu danh sách phim đang chiếu, sắp chiếu, xem thông tin chi tiết của phim (nội dung, trailer) và lịch chiếu tại từng rạp
+Tiền điều kiện | Không có (Khách chưa đăng nhập vẫn có thể sử dụng).
+Hậu điều kiện | Khách hàng tra cứu được thông tin và có thể chuyển sang thao tác đặt vé.
+Luồng sự kiện chính | 1. Khách hàng truy cập vào trang chủ hệ thống. 2. Khách hàng chọn một bộ phim từ danh sách "Phim đang chiếu" hoặc "Phim sắp chiếu". 3. Hệ thống hiển thị trang chi tiết phim (Nội dung, diễn viên, trailer). 4. Khách hàng sử dụng bộ lọc lịch chiếu: Chọn khu vực -> rạp -> ngày chiếu. 5. Hệ thống truy xuất CSDL và hiển thị danh sách các suất chiếu khả dụng. 6. Khách hàng nhấp chọn một giờ chiếu cụ thể để sang bước đặt vé.
+Luồng sự kiện phụ | 5a. Không có suất chiếu phù hợp: 5a1. Hệ thống không tìm thấy lịch chiếu nào khớp với bộ lọc. 5a2. Hệ thống hiển thị thông báo "Hiện chưa có lịch chiếu cho bộ phim này tại rạp/ngày bạn chọn". 5a3. Khách hàng điều chỉnh lại bộ lọc ở Bước 4.
+=== TABLE END ===
+
+2.4.4. Mô tả Use Case 4
+
+=== TABLE START ===
+Use Case ID | UC04
+Tên Use Case | Đặt vé và chọn ghế
+Tác nhân chính | Khách hàng
+Mô tả | Khách hàng tương tác với sơ đồ phòng chiếu để chọn vị trí ghế ngồi mong muốn, chọn thêm dịch vụ (bắp/nước) và khóa ghế tạm thời để chờ thanh toán
+Tiền điều kiện | Khách hàng đã Đăng nhập và đã chọn được một suất chiếu cụ thể.
+Hậu điều kiện | Ghế được hệ thống khóa (giữ chỗ tạm thời) và tạo đơn hàng chờ thanh toán.
+Luồng sự kiện chính | 1. Hệ thống hiển thị sơ đồ phòng chiếu thực tế của suất chiếu đã chọn (thể hiện rõ ghế Trống, Đã bán, Đang chọn). 2. Khách hàng nhấp chọn các vị trí ghế trống mong muốn. 3. Khách hàng có thể chọn mua thêm các dịch vụ đi kèm (Combo bắp nước) nếu có. 4. Khách hàng kiểm tra tổng tiền tạm tính và nhấn nút "Tiếp tục". 5. Hệ thống kiểm tra tình trạng thực tế của các ghế vừa chọn trong CSDL. 6. Hệ thống thực hiện khóa ghế (giữ chỗ trong 10 phút) và chuyển khách hàng sang giao diện Thanh toán trực tuyến.
+Luồng sự kiện phụ | 5a. Xử lý trùng ghế thời gian thực: 5a1. Tại Bước 5, hệ thống phát hiện ghế khách vừa chọn đã bị một người khác nhanh tay khóa trước đó vài giây. 5a2. Hệ thống báo lỗi "Rất tiếc, ghế này vừa có người đặt. Vui lòng chọn ghế khác". 5a3. Hệ thống tự động làm mới lại sơ đồ phòng chiếu để khách chọn lại.
+=== TABLE END ===
+
+2.4.5. Mô tả Use Case 5
+
+=== TABLE START ===
+Use Case ID | UC05
+Tên Use Case | Thanh toán trực tuyến
+Tác nhân chính | Khách hàng
+Mô tả | Quy trình khách hàng thanh toán tiền vé và các dịch vụ đi kèm thông qua các phương thức thanh toán điện tử (ví điện tử, thẻ ngân hàng) để hoàn tất đặt chỗ.
+Tiền điều kiện | Khách hàng đã chọn ghế thành công, đơn hàng đang trong trạng thái đếm ngược giữ ghế (10 phút)
+Hậu điều kiện | Ghế chuyển trạng thái "Đã bán", hệ thống ghi nhận doanh thu và xuất mã vé điện tử (QR Code) cho khách hàng
+Luồng sự kiện chính | 1. Hệ thống hiển thị tóm tắt đơn hàng (tên phim, rạp, ghế, đồng hồ đếm ngược) và danh sách phương thức thanh toán (Ví điện tử, Thẻ ngân hàng) 2. Khách hàng chọn phương thức thanh toán và nhấn "Thanh toán". 3. Hệ thống khởi tạo môi trường giao dịch an toàn. 4. Khách hàng nhập thông tin và thực hiện trả tiền. 5. Hệ thống xác nhận giao dịch thanh toán thành công. 6. Hệ thống chốt cứng ghế trong CSDL thành "Đã bán". 7. Hệ thống sinh mã vé điện tử (QR Code) và gửi thông báo xác nhận cho khách hàng
+Luồng sự kiện phụ | 1a. Hết thời gian giữ ghế (Timeout): 1a1. Đồng hồ đếm ngược ở Bước 1 về 0 trước khi khách hàng thanh toán xong. 1a2. Hệ thống tự động hủy đơn hàng, mở khóa trả ghế về trạng thái "Trống". 1a3. Hệ thống thông báo hết hạn và đưa khách hàng về trang chủ. 5a. Thanh toán thất bại hoặc khách hàng tự hủy: 5a1. Quá trình trả tiền bị lỗi hoặc khách hàng nhấn nút hủy giao dịch. 5a2. Hệ thống báo lỗi "Thanh toán không thành công". 5a3. Nếu vẫn còn thời gian giữ ghế, khách hàng có thể chọn thanh toán lại.
+=== TABLE END ===
+
+2.4.6. Mô tả Use Case 6
+
+=== TABLE START ===
+Use Case ID | UC06
+Tên Use Case | Thống kê - Báo cáo doanh thu
+Tác nhân chính | Quản trị viên
+Mô tả | Hệ thống tự động tổng hợp số liệu giao dịch, cho phép Admin xem biểu đồ và xuất các báo cáo doanh thu theo ngày, theo phim hoặc theo rạp chiếu
+Tiền điều kiện | Admin đã đăng nhập vào hệ thống và CSDL có phát sinh các giao dịch bán vé
+Hậu điều kiện | Hệ thống hiển thị dữ liệu báo cáo trên biểu đồ hoặc xuất thành tệp tin  thành công
+Luồng sự kiện chính | 1. Admin truy cập chức năng "Thống kê - Báo cáo". 2. Hệ thống hiển thị giao diện báo cáo tổng quan. 3. Admin chọn tiêu chí lọc: Báo cáo theo ngày, theo rạp hoặc theo phim. 4. Admin thiết lập mốc thời gian (từ ngày - đến ngày) và nhấn "Xem báo cáo". 5. Hệ thống tính toán và hiển thị dữ liệu trực quan bằng biểu đồ và bảng biểu. 6. Admin nhấn nút "Xuất báo cáo". 7. Hệ thống kết xuất dữ liệu ra file (Excel/PDF) và cho phép Admin tải về,
+Luồng sự kiện phụ | 5a. Không có dữ liệu: 5a1. Tại Bước 5, không có giao dịch bán vé nào trong khoảng thời gian Admin đã chọn. 5a2. Hệ thống hiển thị màn hình trống kèm thông báo "Không có dữ liệu doanh thu trong khoảng thời gian này". 5a3. Admin chọn lại tiêu chí thời gian khác ở Bước 4
+=== TABLE END ===

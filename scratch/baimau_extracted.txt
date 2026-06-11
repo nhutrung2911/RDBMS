@@ -1,0 +1,1497 @@
+TRƯỜNG ĐẠI HỌC GIAO THÔNG VẬN TẢI TP. HỒ CHÍ MINH
+VIỆN CÔNG NGHỆ THÔNG TIN VÀ ĐIỆN, ĐIỆN TỬ
+ĐỒ ÁN MÔN HỌC
+HỆ QUẢN TRỊ CƠ SỞ DỮ LIỆU
+XÂY DỰNG HỆ THỐNG QUẢN LÝ XUẤT NHẬP KHO
+GVHD : Trần Anh Quân
+Nhóm sinh viên thực hiện:
+079206043460_Phan Đức Lương
+087306001441_Phan Hồng Nhật Nguyên
+060306006956_Châu Thụy Mỹ Uyên
+079206025442_Kiên Văn Trực
+079206018521_Tùng Đom Đóm
+TP. HỒ CHÍ MINH, NGÀY 01 THÁNG 05 NĂM 2026
+TÓM TẮT ĐỒ ÁN
+Đồ án “Xây dựng hệ thống quản lý xuất nhập kho” được thực hiện nhằm giải quyết những hạn chế trong phương pháp quản lý kho thủ công hiện nay, đặc biệt ở các hộ kinh doanh nhỏ và vừa. Việc sử dụng sổ sách hoặc các công cụ đơn giản như Excel thường dẫn đến tình trạng dữ liệu phân tán, khó kiểm soát, dễ xảy ra sai sót và thiếu tính nhất quán. Do đó, đề tài hướng đến xây dựng một hệ thống phần mềm quản lý kho hiệu quả, chi phí thấp nhưng vẫn đảm bảo tính chính xác và hỗ trợ tốt cho việc ra quyết định.
+Hệ thống được phát triển dựa trên hệ quản trị cơ sở dữ liệu SQL Server, kết hợp với ngôn ngữ lập trình C# và giao diện Windows Forms. Ứng dụng được thiết kế theo mô hình 3 lớp gồm lớp giao diện người dùng , lớp chuyển đổi dữ liệu và lớp truy cập dữ liệu , giúp tách biệt các thành phần, tăng khả năng bảo trì và mở rộng hệ thống. Các chức năng chính của hệ thống bao gồm quản lý danh mục hàng hóa, sản phẩm, biến thể sản phẩm, kho hàng, vị trí lưu trữ, nhà cung cấp, cũng như các nghiệp vụ nhập kho, xuất kho và theo dõi tồn kho.
+Trong quá trình xây dựng, hệ thống xác định các đối tượng như View, Function, Stored Procedure và Trigger được sử dụng để xử lý nghiệp vụ, tự động cập nhật dữ liệu và kiểm soát các lỗi phát sinh.
+Ngoài ra, đồ án còn tập trung nghiên cứu và mô phỏng các vấn đề trong điều khiển tương tranh như mất dữ liệu cập nhật , đọc dữ liệu rác , không đọc lại được dữ liệu, bóng ma và khóa chết . Từ đó, đề xuất các giải pháp khắc phục như sử dụng transaction, mức độ cô lập phù hợp và cơ chế khóa dữ liệu nhằm đảm bảo tính nhất quán và toàn vẹn của hệ thống.
+Kết quả đạt được là một hệ thống quản lý kho cơ bản, đáp ứng đầy đủ các chức năng chính, giao diện thân thiện, dễ sử dụng và có khả năng xử lý các tình huống thực tế trong môi trường nhiều người dùng. Đề tài không chỉ giúp củng cố kiến thức về hệ quản trị cơ sở dữ liệu mà còn có tính ứng dụng thực tiễn cao trong quản lý kho hàng. 
+DANH MỤC CÁC TỪ VIẾT TẮT
+
+=== TABLE START ===
+Từ viết tắt | Thuật ngữ tiếng Anh | Thuật ngữ tiếng Việt
+DBMS | Database Management System | Hệ quản trị cơ sở dữ liệu
+SQL | Structured Query Language | Ngôn ngữ truy vấn có cấu trúc
+T-SQL | Transact-SQL | Truy vấn nâng cao trong SQL Server
+ERD | Entity Relationship Diagram | Sơ đồ thực thể quan hệ
+GUI | Graphical User Interface | Giao diện người dùng
+DTO | Data Transfer Object | Đối tượng truyền dữ liệu
+DAL | Data Access Layer | Lớp truy cập dữ liệu
+CRUD | Create, Read , Update, Delete | Các thao tác thêm, đọc, sửa, xóa
+UI | User Interface | Giao diện người dùng
+UX | User Experience | Trải nghiệm người dùng
+API | Application Programming Interface | Giao diện lập trình ứng dụng
+IDE | Integrated Development Environment | Môi trường phát triển tích hợp
+ACID | Atomicity, Consistency, Isolation, Durability | Các tính chất của giao dịch
+SP | Stored Procedure | Thủ tục lưu trữ
+SKU | Stock Keeping Unit | Mã định danh sản phẩm/biến thể
+ERP | Enterprise Resource Planning | Hệ thống hoạch định nguồn lực doanh nghiệp
+RDBMS | Relational Database Management System | Hệ quản trị CSDL quan hệ
+RFID | Radio Frequency Identification | Nhận dạng bằng tần số vô tuyến
+=== TABLE END ===
+
+DANH MỤC BẢNG BIỂU
+Bảng 1.1. Chức năng cốt lõi của hệ quản trị cơ sở dữ liệu [1]2
+Bảng 1.2. Công cụ và hạ tầng sử dụng3
+Bảng 1.3. Kiến trúc 3 lớp trong ứng dụng quản lý kho4
+Bảng 2.1. Yêu cầu phi chức năng8
+Bảng 2.2. Yêu cầu chức năng9
+Bảng 3.1. Mô tả các thực thể chính trong hệ thống10
+Bảng 3.2. Ràng buộc kiểm tra11
+Bảng 3.3. Ràng buộc duy nhất11
+Bảng 3.4. Ràng buộc không rỗng12
+Bảng 3.5. Ràng buộc mặc định13
+Bảng 3.6. Quy định về nghiệp vụ13
+Bảng 3.7. Danh mục hàng hóa15
+Bảng 3.8. Sản phẩm15
+Bảng 3.9. Biến thể sản phẩm16
+Bảng 3.10. Kho hàng16
+Bảng 3.11. Vị trí lưu kho16
+Bảng 3.12. Nhà cung cấp16
+Bảng 3.13. Phiếu nhập16
+Bảng 3.14. Phiếu xuất17
+Bảng 3.15. Chi tiết xuất kho17
+Bảng 3.16. Chi tiết nhập kho17
+Bảng 3.17. Tồn kho17
+Bảng 4.1. Các thủ tục quản lí danh mục24
+Bảng 4.2. Các thủ tục quản lí sản phẩm25
+Bảng 4.3. Các thủ tục quản lí biến thể sản phẩm26
+Bảng 4.4. Các thủ tục quản lí kho hàng27
+Bảng 4.5. Các thủ tục quản lí vị trí lưu trữ29
+Bảng 4.6. Các thủ tục quản lí nhà cung cấp31
+Bảng 4.7. Các thủ tục quản lí nhập kho32
+Bảng 4.8. Các thủ tục quản lí xuất kho34
+Bảng 4.9. Các vấn đề khi truy cập đồng thời37
+Bảng 4.11. Hai giao tác nhập hàng và kiểm tra tồn kho39
+Bảng 4.13. Hai giao tác tìm kiếm và cập nhật thông tin41
+Bảng 4.14. Hai giao tác tìm kiếm và cập nhật thông tin43
+Bảng 4.15. Hai giao tác xuất kho và hủy chi tiết xuất45
+Bảng 4.16. Giải pháp sử dụng khóa ghi tránh mất cập nhật dữ liệu tồn kho47
+Bảng 4.17. Giải pháp sử dụng tránh đọc dữ liệu rác49
+Bảng 4.18. Giải pháp sử dụng khóa đọc, ghi tránh không đọc lại được dữ liệu50
+Bảng 4.19. Giải pháp sử dụng khóa đọc, ghi tránh bóng ma52
+Bảng 4.20. Giải pháp tránh khóa chết53
+Bảng 5.1. Tổng quan cấu trúc thư mục dự án59
+Bảng 5.2. Mô tả lớp GUI60
+Bảng 5.3. Mô tả lớp DTO60
+Bảng 5.4. Mô tả lớp DAL61
+DANH MỤC HÌNH ẢNH
+Hình 1.1. Mô hình 3 lớp3
+Hình 2.1. Danh sách nhà cung cấp5
+Hình 2.2. Phiếu nhập kho [1]6
+Hình 2.3. Phiếu xuất kho [1]6
+Hình 2.4. Thẻ kho [2]7
+Hình 2.5. Biểu đồ phân rã chức năng8
+Hình 3.1. Biểu đồ thực thể kết hợp mức luận lý14
+Hình 3.2. Lược đồ cơ sở dữ liệu15
+Hình 4.1. Sơ đồ tuần tự thực hiện nhập hàng và xuất hàng39
+Hình 4.2. Sơ đồ tuần tự thực hiện nhập hàng và kiểm tra tồn kho40
+Hình 4.3. Sơ đồ tuần tự thực hiện cập nhật và tìm kiếm42
+Hình 4.4. Sơ đồ tuần tự hiển thị và thêm sản phẩm44
+Hình 5.1. Giao diện đăng nhập54
+Hình 5.2. Giao diện trang chủ54
+Hình 5.3. Giao diện quản lý danh mục55
+Hình 5.4. Giao diện quản lý sản phẩm55
+Hình 5.5. Giao diện quản lý biến thể sản phẩm56
+Hình 5.6. Giao diện quản lý kho hàng56
+Hình 5.7. Giao diện quản lý lưu trữ57
+Hình 5.8. Giao diện quản lý nhà cung cấp57
+Hình 5.9. Giao diện nhập kho58
+Hình 5.10. Giao diện xuất kho58
+Hình 5.11. Giao diện quản lý tồn kho59
+MỨC ĐỘ ĐÓNG GÓP CỦA THÀNH VIÊN TRONG NHÓM
+
+=== TABLE START ===
+TT | Họ và tên thành viên | Các nội dung, công việc thành viên đóng góp cho nhóm | Mức độ đóng góp 0 - 100%
+1 | Châu Thụy Mỹ Uyên | 1/ Hoàn thiện nội dung chương 1 2/ Xác định vấn đề Dirty Read 3/ Giải pháp ngăn vấn đề Dirty Read | 100%
+2 | Phan Hồng Nhật Nguyên | 1/ Hoàn thiện nội dung chương 2 2/ Xác định vấn đề Non-repeatable Read 3/ Giải pháp ngăn vấn đề Non-repeatable Read | 100%
+3 | Phan Đức Lương | 1/ Hoàn thiện nội dung chương 3 2/ Xây dựng View, Stored Procedure, Function 3/ Xác định vấn đề Lost Update 4/ Giải pháp ngăn vấn đề Lost Update | 100%
+4 | Bùi Thanh Tùng | 1/ Hoàn thiện nội dung chương 4 2/ Xây dựng Trigger 3/ Xác định vấn đề Phantom 4/ Giải pháp ngăn vấn đề Phantom | 100%
+5 | Kiên Văn Trực | 1/ Hoàn thiện nội dung chương 5 2/ Xác định vấn đề Deadlock 3/ Giải pháp ngăn vấn đề Deadlock | 100%
+=== TABLE END ===
+
+CHƯƠNG 1: TỔNG QUAN HỆ THỐNG
+1.1. Lý do chọn đề tài
+1.1.1. Bối cảnh và thực trạng
+Hiện nay, cơ sở kinh doanh nhỏ và vừa dành thời gian mỗi ngày để ghi nhận dữ liệu hàng hóa bằng các sổ ghi chú hay các tập tin Excel gây dữ liệu phân mảnh khó kiểm soát. Sai sót khó tránh và thất thoát chi phí dẫn đến kinh doanh kém và không chứng minh được tính hợp pháp của hàng hóa. 
+Các phần mềm hoạch định nguồn lực doanh nghiệp phổ biến hiện nay như ERP, SAP hỗ trợ mạnh mẽ các nghiệp vụ quản lí kho, nhiều chức năng và khả năng tích hợp dữ liệu đồng bộ. Tuy vậy, thách thức lớn về mặt bằng chi phí đầu tư và phạm vi chức năng mở rộng phù hợp các doanh nghiệp lớn. Kiểm soát lượng hàng hóa nhập, còn tồn đọng mà không tích hợp sâu với các bộ phận khác thì phần mềm quản lý kho độc lập là sự lựa chọn hợp lý cho hộ kinh doanh gia đình.
+1.1.2. Nhu cầu giải pháp phần mềm chi phí thấp
+Trước những hạn chế của phương pháp quản lý truyền thống, các hộ kinh doanh gia đình có nhu cầu áp dụng các giải pháp phần mềm quản lý kho với chi phí thấp nhưng vẫn đảm bảo hiệu quả.
+Việc xây dựng một hệ thống quản lý kho đơn giản, hiệu quả sẽ giúp các hộ kinh doanh nâng cao năng suất, giảm thiểu sai sót và hỗ trợ ra quyết định tốt hơn.
+1.1.3. Phạm vi triển khai
+Xây dựng hệ thống quản lý xuất nhập và tồn kho, mô phỏng một phần quy trình lưu thông hàng hóa từ nhập hàng, xuất kho, vận đơn và tổ chức lưu trữ các đối tượng tập trung một cách có liên kết. Ngoài ra phân tích, mô hình hóa bài toán dựa trên các nghiệp vụ cốt lõi trong quy trình xuất, nhập và theo dõi tồn kho. 
+1.2. Cơ sở lý thuyết
+1.2.1. Khái niệm về hệ quản trị cơ sở dữ liệu
+Hệ quản trị cơ sở dữ liệu là một phần mềm chuyên dụng giúp tổ chức lưu trữ, truy cập và xử lý dữ liệu một cách có hệ thống. Đóng vai trò như một lớp trung gian giữa ứng dụng và cơ sở dữ liệu, cho phép thực hiện các thao tác như tạo mới, truy vấn, cập nhật hay xóa dữ liệu một cách hiệu quả và an toàn [1].
+Nói cách khác, Hệ quản trị cơ sở dữ liệu là công cụ giúp doanh nghiệp kiểm soát và vận hành kho dữ liệu của mình một cách chủ động từ việc thiết lập, quản lý cho đến duy trì và bảo vệ toàn bộ hệ thống dữ liệu [1].
+1.2.2. Chức năng của hệ quản trị cơ sở dữ liệu
+Bảng 1.1. Chức năng cốt lõi của hệ quản trị cơ sở dữ liệu [1]
+
+=== TABLE START ===
+Vai trò | Mô tả
+Quản lý từ điển dữ liệu | Lưu giữ thông tin mô tả về dữ liệu.
+Tổ chức và lưu trữ dữ liệu | Đảm nhận tổ chức và trữ dữ liệu gồm định dạng báo cáo, quy tắc kiểm tra, đoạn mã xử lý hoặc nội dung đa phương tiện như hình ảnh hoặc video.
+Chuyển đổi và trình bày dữ liệu | Thực hiện chuyển đổi thành cấu trúc phù hợp với hệ thống để lưu trữ và xử lý.
+Kiểm soát và bảo vệ dữ liệu | Cung cấp nhiều lớp bảo mật, phân quyền theo vai trò và mã hóa dữ liệu.
+Hỗ trợ truy cập đồng thời | Truy cập, thao tác trên hệ thống cùng lúc vẫn đảm bảo tính toàn vẹn và đồng nhất dữ liệu.
+Đảm bảo tính toàn vẹn dữ liệu | Dữ liệu luôn chính xác, nhất quán và không bị lỗi trong quá trình nhập, sửa đổi hay xóa.
+Ngôn ngữ truy vấn | Hỗ trợ ngôn ngữ truy vấn, giúp thao tác với dữ liệu mà không cần hiểu cách thức kỹ thuật bên trong.
+Quản lý giao dịch | Tuân thủ quy tắc ACID, đảm bảo các thao tác thực hiện đầy đủ hoặc hoàn toàn không thực hiện nếu gặp lỗi.
+=== TABLE END ===
+
+1.3. Công nghệ và môi trường phát triển
+Bảng 1.2. Công cụ và hạ tầng sử dụng
+
+=== TABLE START ===
+Danh mục | Chi tiết
+Ngôn ngữ lập trình | C# và T-SQL
+UI framework | Windows Forms
+Hệ quản trị cơ sở dữ liệu | SQL Server
+Quản lý mã nguồn | Git và GitHub
+Trình soạn thảo | Visual Studio Code
+Tài liệu | Microsoft Word
+=== TABLE END ===
+
+1.4. Tổng quan về mô hình 3 lớp
+1.4.1. Giới thiệu mô hình 3 lớp
+Mô hình 3 lớp là một kiến trúc phần mềm phổ biến, chia ứng dụng thành 3 thành phần chính gồm lớp giao diện, lớp xử lí nghiệp vụ và lớp truy cập dữ liệu. 
+Hình 1.1. Mô hình 3 lớp
+1.4.2. Ứng dụng mô hình 3 lớp
+Bảng 1.3. Kiến trúc 3 lớp trong ứng dụng quản lý kho
+
+=== TABLE START ===
+Thành phần | Vai trò
+Presentation Layer | Bao gồm các thành phần giao diện WinForms, nơi thực hiện các thao tác của người dùng và hiển thị kết quả.
+Data Access Layer | Nơi giao tiếp với hệ quản trị cơ sở dữ liệu, kết nối và thực hiện các công việc liên quan đến lưu trữ và truy vấn dữ liệu.
+Data Transfer Object | Thực hiện chuyển đổi hay ánh xạ giữa các bản ghi trong cơ sở dữ liệu với các đối tượng trong ứng dụng.
+=== TABLE END ===
+
+1.5. Mục tiêu hệ thống
+Mục tiêu của đề tài là xây dựng hệ thống quản lý xuất nhập kho, đồng thời vận dụng các kiến thức trong môn Hệ quản trị cơ sở dữ liệu vào thực tế. Hệ thống được thiết kế với cơ sở dữ liệu chặt chẽ, đảm bảo các ràng buộc toàn vẹn và tính nhất quán dữ liệu.
+Bên cạnh đó, hệ thống sử dụng ngôn ngữ SQL kết hợp với các đối tượng như View, Stored Procedure, Function và Trigger nhằm hỗ trợ xử lý nghiệp vụ, kiểm tra và tự động cập nhật dữ liệu. Đồng thời, áp dụng được các vấn đề của điều khiển tương tranh như mất dữ liệu cập nhật, đọc dữ liệu rác, không đọc lại được dữ liệu, bóng ma và khóa chết. Từ đó, phát hiện các trường hợp thực tế và đề xuất các giải pháp cho hệ thống.
+CHƯƠNG 2: PHÂN TÍCH THIẾT KẾ HỆ THỐNG
+2.1. Khảo sát nghiệp vụ
+2.1.1. Mô hình hoạt động trong quản lý kho
+Hộ kinh doanh thường quản lý kho hàng hoạt động đơn giản, chủ yếu xoay quanh việc nhập, xuất và lưu trữ hàng hóa. Khi nhập hàng, người quản lý lập phiếu để ghi nhận thông tin rồi kiểm tra và sắp xếp vào kho. Tuy nhiên, đối với những hộ kinh doanh nhỏ, việc sắp xếp vẫn còn khá thủ công, chưa thật sự khoa học.
+Khi có nhu cầu xuất hàng để bán hoặc phân phối, phiếu xuất kho sẽ được lập nhằm theo dõi số lượng hàng đã xuất. Sau mỗi lần nhập hoặc xuất, số lượng tồn kho được cập nhật qua sổ sách hoặc các công cụ đơn giản.
+Ngoài ra, hộ kinh doanh còn quản lý danh mục hàng, nhà cung cấp và vị trí lưu trữ. Tuy nhiên, do quy mô nhỏ và còn làm thủ công nên việc kiểm soát dễ xảy ra sai sót khi lượng hàng tăng.
+2.1.2. Các biểu mẫu nghiệp vụ đang sử dụng
+2.1.2.1. Sổ nhà cung cấp
+Lưu trữ danh sách các nhà cung ứng bao gồm các trường thông tin như tên nhà cung ứng, người liên hệ, địa chỉ, mặt hàng cung ứng và ghi chú.
+Hình 2.1. Danh sách nhà cung cấp
+2.1.2.2. Biểu mẫu phiếu nhập kho
+Phiếu nhập gồm các trường thông tin như số thứ tự, tên hàng hóa, mã số, đơn vị tính, thực nhập, đơn giá và thành tiền.
+Hình 2.2. Phiếu nhập kho [1]
+2.1.2.3. Biểu mẫu phiếu xuất kho
+Phiếu xuất kho gồm các trường thông tin như số thứ tự, tên sản phẩm, mã vật tư, đơn vị tính, số lượng yêu cầu, thực xuất, đơn giá và thành tiền.
+Hình 2.3. Phiếu xuất kho [1]
+2.1.2.4. Biểu mẫu sổ theo dõi tồn kho
+Thẻ kho gồm các trường thông tin như số thứ tự, ngày tháng, số hiệu chứng từ, diễn giải, ngày nhập hoặc xuất, số lượng nhập, xuất và tồn kho hiện tại.
+Hình 2.4. Thẻ kho [2]
+2.1.3. Những khó khăn trong quản lý kho thủ công
+Quy trình quản lý kho hiện tại tương đối phức tạp với các biểu mẫu, chứng từ gây khó khăn trong việc tổ chức, lưu trữ. Ngoài ra, luồng quản lý hoạt động yêu cầu nhiều bộ phận liên quan như bộ phận lập phiếu, ban kế toán, thủ kho.
+Phương pháp thủ công ghi nhận nhiều hạn chế, việc ghi chép sổ sách hoặc các công cụ dễ xảy ra sai sót và thiếu nhất quán về dữ liệu, gây trùng lập và lãng phí thời gian do thiếu tự động hóa quy trình.
+Hệ quả dẫn đến thiếu hiệu quả trong việc quản lý, các báo cáo thống kê thiếu nhất quán và mất thời gian trong việc tập hợp các biểu mẫu, chứng từ liên quan.
+2.2. Yêu cầu hệ thống
+Từ những hạn chế trên, hệ thống được xây dựng nhằm khắc phục một phần các vấn đề về sai sót dữ liệu, khó khăn trong tổng hợp báo cáo và tra cứu thông tin. Do đó các yêu cầu chức và yêu cầu phi chức năng được đề xuất như sau:
+2.2.1. Yêu cầu chức năng
+Hình 2.5. Biểu đồ phân rã chức năng
+2.2.2. Yêu cầu phi chức năng
+Bảng 2.1. Yêu cầu phi chức năng
+
+=== TABLE START ===
+Yêu cầu phi chức năng | Mô tả chi tiết
+Khả năng sử dụng | Giao diện trực quan, dễ thao tác, các màn hình, chức năng được bố trí hợp lý.
+An toàn thông tin | Bảo mật dữ liệu, hạn chế truy cập trái phép vào phần mềm nội bộ.
+Hiệu suất | Đảm bảo về thời gian phản hồi.
+Độ tin cậy | Vận hành ổn định, phục hồi dữ liệu sau sự cố.
+Bảo trì | Cấu trúc rõ ràng, thuận lợi cho việc sửa lỗi, nâng cấp và mở rộng.
+Tính nhất quán dữ liệu | Đảm bảo tính toàn vẹn của dữ liệu.
+=== TABLE END ===
+
+2.3. Phân tích các chức năng chính của hệ thống
+Bảng 2.2. Yêu cầu chức năng
+
+=== TABLE START ===
+ID | Tên chức năng | Mô tả | Tác nhân chính | Độ ưu tiên
+UC01 | Quản lý nhập kho | Quản lý hoạt động nhập kho bao gồm tạo mới phiếu nhập, hiển thị danh sách, xem chi tiết và cập nhật thông tin các mặt hàng nhập. | Quản lý kho | Cao
+UC02 | Quản lý xuất kho | Quản lý hoạt động xuất kho bao gồm tạo mới phiếu xuất, theo dõi danh sách, xem chi tiết và cập nhật thông tin hàng hóa xuất. | Quản lý kho | Cao
+UC03 | Quản lý tồn kho | Theo dõi và quản lý tồn kho, tự động cập nhật số lượng hàng hóa dựa trên các giao dịch nhập và xuất kho. | Quản lý kho | Cao
+UC04 | Quản lý cung ứng | Quản lý thông tin nhà cung cấp bao gồm thêm mới, cập nhật, tra cứu và xóa dữ liệu. | Quản lý kho | Trung bình
+UC05 | Quản lý kho hàng | Quản lý thông tin các kho lưu trữ bao gồm thêm mới, cập nhật, tra cứu và xóa dữ liệu. | Quản lý kho | Trung bình
+UC06 | Quản lý vị trí lưu trữ trong kho | Quản lý thông tin vị trí lưu trữ trong kho bao gồm thêm mới, cập nhật, tra cứu và xóa dữ liệu. | Quản lý kho | Trung bình
+=== TABLE END ===
+
+CHƯƠNG 3: PHÂN TÍCH VÀ THIẾT KẾ CƠ SỞ DỮ LIỆU
+3.1. Phân tích dữ liệu hệ thống
+3.1.1. Các thực thể trong hệ thống
+Các thực thể được xác định sau quá trình phân tích các đối tượng chính xuất hiện trong bài toán, trong đó hoạt động tổ chức lưu trữ, kiểm soát mặt hàng trong kho và minh bạch các hóa đơn chứng từ là quy trình cốt lõi của hệ thống.
+Bảng 3.1. Mô tả các thực thể chính trong hệ thống
+
+=== TABLE START ===
+Thực thể | Mô tả
+Danh mục hàng hóa | Phân loại mặt hàng, linh kiện cùng loại
+Sản phẩm | Lưu trữ thông tin chi tiết về hàng hóa
+Kho hàng | Lưu trữ các thông tin chi tiết về kho hàng
+Vị trí lưu trữ | Chi tiết về các vị trí lưu trữ trong kho
+Nhà cung cấp | Lưu trữ các thông tin về nhà cung cấp
+Phiếu xuất | Lưu trữ thông tin các chứng từ xuất kho
+Phiếu nhập | Lưu trữ thông tin các chứng từ nhập kho
+Tài khoản | Lưu trữ thông tin tài khoản
+=== TABLE END ===
+
+3.1.2. Quan hệ giữa các thực thể
+Quan hệ giữa các thực thể giúp tổ chức lưu trữ các thông tin có liên kết với nhau, Trong đó các quan hệ được giải thích qua các văn bản sau:
+Danh mục hàng hóa dùng để xác định một hoặc nhiều các mặt hàng cùng loại. Mặt hàng, sản phẩm được xác định thuộc về một danh mục duy nhất.
+Một sản phẩm sinh ra một hoặc nhiều các biến thể khác nhau và một biến thể thuộc về một mặt hàng duy nhất.
+Một kho hàng gồm một hay nhiều các vị trí lưu trữ trong kho và một vị trí lưu trữ thuộc một kho hàng duy nhất.
+Một lần nhập hàng ghi nhận nhập nhiều loại mặt hàng khác nhau từ nhiều nhà cung cấp. Trong đó cũng ghi nhận nhiều vị trí lưu trữ trong kho.
+Một lần xuất hàng ghi nhận nhiều loại mặt hàng cần xuất kho và từ nhiều vị trí lấy hàng khác nhau.
+Một vị trí lưu trữ gồm nhiều loại mặt hàng khác nhau và một mặt hàng được lưu trữ ở nhiều vị trí từ đó thực thể kết hợp tồn kho sinh ra để kiểm soát mặt hàng tại vị trí cụ thể.
+3.2. Các ràng buộc dữ liệu
+3.2.1. Toàn vẹn miền giá trị 
+Bảng 3.2. Ràng buộc kiểm tra
+
+=== TABLE START ===
+Thực thể | Thuộc tính | Điều kiện | Mô tả
+Kho hàng | Sức chứa | Sức chứa > 0 | Sức chứa kho phải dương
+Vị trí lưu trữ | Sức chứa | Sức chứa > 0 | Sức chứa tại vị trí phải dương
+Tồn kho | Số lượng | Số lượng >=0 | Tồn kho không âm
+Chi tiết nhập | Số lượng | Số lượng nhập kho > 0 | Số lượng nhập kho phải dương
+Chi tiết xuất | Số lượng | Số lượng xuất kho > 0 | Số lương xuất kho phải dương
+=== TABLE END ===
+
+Chú thích: Mô tả chi tiết các ràng buộc kiểm tra
+Bảng 3.3. Ràng buộc duy nhất
+
+=== TABLE START ===
+Thực thể | Thuộc tính | Mô tả
+Danh mục hàng hóa | Tên danh mục | Tên dang mục không được trùng
+Biến thể sản phẩm | Mã biến thể sản phẩm | Mã biến thể sản phẩm không được trùng
+Kho hàng | Tên kho hàng | Tên kho hàng không được trùng
+Nhà cung cấp | Email nhà cung cấp | Email không được trùng
+Nhà cung cấp | Số điện thoại nhà cung cấp | Số điện thoại không được trùng
+=== TABLE END ===
+
+Chú thích: Mô tả chi tiết các ràng buộc duy nhất
+Bảng 3.4. Ràng buộc không rỗng
+
+=== TABLE START ===
+Thực thể | Thuộc tính | Not null | Mô tả
+Danh mục hàng | Tên danh mục | Có | Tên danh mục không được null
+Sản phầm | Tên sản phẩm | Có | Tên sản phẩm không được null
+Biến thể sản phẩm | Mã sản phẩm | Có | Biến thể sản phẩm thuộc sản phẩm cụ thể
+Biến thể sản phẩm | Mã biến thể | Có | Mã biển thể sản phẩm không được null
+Kho hàng | Tên kho hàng | Có | Tên kho hàng không được null
+Vị trí lưu kho | Mã kho hàng | Có | Vị trí lưu kho thuộc về kho hàng cụ thể
+Nhà cung cấp | Tên cung cấp | Có | Tên nhà cung cấp không được null
+Phiếu nhập | Ngày nhập kho | Có | Ngày nhập kho không được null
+Phiếu xuất | Ngày xuất kho | Có | Ngày xuất kho không được null
+Chi tiết phiếu nhập | Mã phiếu nhập | Có | Chi tiết nhập thuộc về phiếu nhập cụ thể
+Chi tiết phiếu nhập | Mã biến thể | Có | Chi tiết nhập ghi nhận mã biến thể cụ thể
+Chi tiết phiếu nhập | Mã cung cấp | Có | Chi tiết nhập ghi nhận cung cấp cụ thể
+Chi tiết phiếu nhập | Mã vị trí | Có | Chi tiết nhập ghi nhận vị trí lưu trữ cụ thể
+Chi tiết phiếu nhập | Số lượng | Có | Chi tiết nhập ghi nhận số lượng cụ thể
+Chi tiết phiếu xuất | Mã phiếu xuất | Có | Chi tiết xuất thuộc về phiếu xuất cụ thể
+Chi tiết phiếu xuất | Mã vị trí | Có | Chi tiết xuất ghi nhận vị trị cụ thể
+Chi tiết phiếu xuất | Số lượng | Có | Chi tiết xuất ghi nhận số lượng cụ thể
+Chi tiết phiếu xuất | Mã biến thể | Có | Chi tiết xuất ghi nhận biến thể cụ thể
+Tồn kho | Số lượng | Có | Tồn kho ghi nhận số lượng cụ thể
+=== TABLE END ===
+
+Chú thích: Mô tả chi tiết ràng buộc không rỗng
+Bảng 3.5. Ràng buộc mặc định
+
+=== TABLE START ===
+Thực thể | Thuộc tính | Giá trị mặc định | Mô tả
+Phiếu nhập | Ngày nhập kho | GETDATE() | Ghi nhận ngày hiện tại
+Phiếu xuất | Ngày xuất kho | GETDATE() | Ghi nhận ngày hiện tại
+Tồn kho | Số lượng | 0 | Tồn kho ban đầu bằng 0
+=== TABLE END ===
+
+3.2.2. Ràng buộc nghiệp vụ
+Bảng 3.6. Quy định về nghiệp vụ
+
+=== TABLE START ===
+Nghiệp vụ | Mô tả
+Hóa đơn, chứng từ xuất nhập kho | Không sửa các phiếu nhập hoặc phiếu xuất và các dòng chi tiết ghi nhận xuất nhập kho liên quan.
+Tự động cập nhật tồn kho | Quy trình Thực hiện Nhập kho 1) Kiểm tra sức chưa tại vị trí lưu kho 2) Kiểm tra sức chứa của kho 3) Xác định bản ghi tồn kho tồn tại 4) Cộng số lượng tại vị trí lưu kho 5) Cập nhật số lượng lưu trữ Xuất kho 1) Kiểm tra số lượng lưu trữ tại vị trí 2) Trừ số lượng tại vị trí lưu kho 3) Cập nhật số lượng lưu trữ | Quy trình | Thực hiện | Nhập kho | 1) Kiểm tra sức chưa tại vị trí lưu kho 2) Kiểm tra sức chứa của kho 3) Xác định bản ghi tồn kho tồn tại 4) Cộng số lượng tại vị trí lưu kho 5) Cập nhật số lượng lưu trữ | Xuất kho | 1) Kiểm tra số lượng lưu trữ tại vị trí 2) Trừ số lượng tại vị trí lưu kho 3) Cập nhật số lượng lưu trữ
+Quy trình | Thực hiện
+Nhập kho | 1) Kiểm tra sức chưa tại vị trí lưu kho 2) Kiểm tra sức chứa của kho 3) Xác định bản ghi tồn kho tồn tại 4) Cộng số lượng tại vị trí lưu kho 5) Cập nhật số lượng lưu trữ
+Xuất kho | 1) Kiểm tra số lượng lưu trữ tại vị trí 2) Trừ số lượng tại vị trí lưu kho 3) Cập nhật số lượng lưu trữ
+Sức chứa tại vị trí lưu trữ | Tổng sức chứa tại các vị trí lưu trữ không được vượt quá sức chứa kho hàng.
+Sức chứa tại kho hàng | Tổng sức chứa tại các vị trí lưu kho không vượt quá sức chứa kho hàng.
+Mã định danh biến thể sản phẩm | Đặt mã sản phẩm theo tên và thuộc tính hàng hóa
+Phiếu nhập | Tồn tại ít nhất 1 bản ghi trong chi tiết nhập kho
+Phiếu xuất | Tồn tại ít nhất 1 bản ghi trong chi tiết xuất kho
+Bản ghi trong chi tiết nhập xuất | Tránh ghi nhận trùng lập chi tiết nhập hoặc xuất kho
+=== TABLE END ===
+
+3.3. Sơ đồ thực thể quan hệ
+Hình 3.1. Biểu đồ thực thể kết hợp mức luận lý
+3.4. Thiết kế cơ sở dữ liệu
+3.4.1. Cơ sở dữ liệu
+Hình 3.2. Lược đồ cơ sở dữ liệu
+3.4.2. Cấu trúc chi tiết từng bảng
+Bảng 3.7. Danh mục hàng hóa
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+category_id | INT | Khóa chính
+category_name | NVARCHAR(100) | Có | Có
+=== TABLE END ===
+
+ Bảng 3.8. Sản phẩm
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+product_id | INT | Khóa chính
+product_name | NVARCHAR(150) | Có | Có
+description | NVARCHAR(255) | Không | Không
+category_id | INT | Khóa ngoại | Không | Không
+=== TABLE END ===
+
+Bảng 3.9. Biến thể sản phẩm
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+sku_id | INT | Khóa chính
+product_id | INT | Khóa ngoại | Không | Có
+sku_code | NVARCHAR(50) | Có | Có
+unit | NVARCHAR(30) | Không | Có
+=== TABLE END ===
+
+Bảng 3.10. Kho hàng
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+warehouse_id | INT | Khóa chính
+warehouse_name | NVARCHAR(150) | Có | Có
+address | NVARCHAR(250) | Không | Không
+max_capacity | INT | Không | Có
+=== TABLE END ===
+
+Bảng 3.11. Vị trí lưu kho
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+location_id | INT | Khóa chính
+warehouse_id | NVARCHAR(100) | Khóa ngoại | Không | Có
+location_description | NVARCHAR(150) | Không | Không
+capacity | INT | Không | Có
+=== TABLE END ===
+
+Bảng 3.12. Nhà cung cấp
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+supplier_id | INT | Khóa chính
+supplier_name | NVARCHAR(150) | Không | Có
+email | NVARCHAR(100) | Có | Không
+phone | NVARCHAR(20) | Có | Không
+=== TABLE END ===
+
+Bảng 3.13. Phiếu nhập
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+import_id | INT | Khóa chính
+import_date | Date | Không | Có
+=== TABLE END ===
+
+Bảng 3.14. Phiếu xuất
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+export_id | INT | Khóa chính
+export_date | Date | Không | Có
+=== TABLE END ===
+
+Bảng 3.15. Chi tiết xuất kho
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+export_detail_id | INT | Khóa chính
+export_id | INT | Khóa ngoại | Không | Có
+sku_id | INT | Khóa ngoại | Không | Có
+location_id | INT | Khóa ngoại | Không | Có
+quantity | INT | Không | Có
+=== TABLE END ===
+
+Bảng 3.16. Chi tiết nhập kho
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+import_detail_id | INT | Khóa chính
+import_id | INT | Khóa ngoại | Không | Có
+sku_id | INT | Khóa ngoại | Không | Có
+supplier_id | INT | Khóa ngoại | Không | Có
+location_id | INT | Khóa ngoại | Không | Có
+quantity | INT | Không | Có
+=== TABLE END ===
+
+Bảng 3.17. Tồn kho
+
+=== TABLE START ===
+Tên trường | Kiểu dữ liệu | Khóa | Unique | Not Null
+sku_id | INT | Khóa chính | Không | Có
+location_id | INT | Khóa chính | Không | Có
+quantity | INT
+=== TABLE END ===
+
+CHƯƠNG 4: CÀI ĐẶT CƠ SỞ DỮ LIỆU VÀ XÁC ĐỊNH TÌNH HUỐNG TRANH CHẤP
+4.1. Tạo Database
+-- Lệnh tạo Database
+CREATE DATABASE warehouse_database
+GO
+-- Lệnh sử dụng Database 
+USE warehouse_database
+GO
+4.2. Cài đặt các bảng
+4.2.1. Tạo bảng Category
+-- Quan hệ danh mục hàng hóa
+-- Tạo bảng Catagory
+CREATE TABLE Category (
+    category_id   INT PRIMARY KEY IDENTITY(1,1),
+    category_name NVARCHAR(100) NOT NULL UNIQUE       
+);
+4.2.2. Tạo bảng Product
+-- Quan hệ sản phẩm
+-- Tạo bảng Product
+CREATE TABLE Product (
+    product_id  INT PRIMARY KEY IDENTITY(1,1),
+    product_name NVARCHAR(150) NOT NULL,
+    description NVARCHAR(255),
+    category_id  INT FOREIGN KEY REFERENCES Category(category_id)
+);
+4.2.3. Tạo bảng Sku
+-- Quan hệ biến thể sản phẩm
+-- Tạo bảng Sku
+CREATE TABLE Sku (
+    sku_id INT PRIMARY KEY IDENTITY(1,1),
+    product_id INT NOT NULL FOREIGN KEY REFERENCES Product(product_id),
+    sku_code NVARCHAR(50) NOT NULL UNIQUE,           
+    unit NVARCHAR(30)
+);
+4.2.4. Tạo bảng Warehouse
+CREATE TABLE Warehouse (
+    warehouse_id INT PRIMARY KEY IDENTITY(1,1),
+    warehouse_name NVARCHAR(150) NOT NULL UNIQUE,      
+    address  NVARCHAR(250),
+    max_capacity  INT NOT NUll 
+);
+4.2.5. Tạo bảng StorageLocation
+CREATE TABLE StorageLocation (
+    location_id INT PRIMARY KEY IDENTITY(1,1),
+    warehouse_id INT NOT NULL FOREIGN KEY REFERENCES Warehouse(warehouse_id),
+    location_description NVARCHAR(150),
+    capacity INT NOT NULL
+);
+4.2.6. Tạo bảng Supplier
+CREATE TABLE Supplier (
+    supplier_id INT PRIMARY KEY IDENTITY(1,1),
+    supplier_name NVARCHAR(150) NOT NULL,
+    address NVARCHAR(250),
+    email  NVARCHAR(100) UNIQUE,             
+    phone  NVARCHAR(20)  UNIQUE                 
+);
+4.2.7. Tạo bảng ImportReceipt
+CREATE TABLE ImportReceipt (
+    import_id  INT PRIMARY KEY IDENTITY(1,1),
+    import_date DATE NOT NULL DEFAULT GETDATE()
+);
+4.2.8. Tạo bảng ImportDetail
+CREATE TABLE ImportDetail (
+    import_detail_id INT PRIMARY KEY IDENTITY(1,1),
+    import_id INT NOT NULL FOREIGN KEY REFERENCES ImportReceipt(import_id),
+    sku_id INT NOT NULL FOREIGN KEY REFERENCES Sku(sku_id),
+    supplier_id INT NOT NULL FOREIGN KEY REFERENCES Supplier(supplier_id),
+    location_id INT NOT NULL FOREIGN KEY REFERENCES StorageLocation(location_id),
+    quantity INT NOT NULL
+);
+4.2.9. Tạo bảng ExportReceipt
+-- Quan hệ phiếu nhập kho
+-- Lệnh tạo bảng ExportReceipt
+CREATE TABLE ExportReceipt (
+    export_id INT PRIMARY KEY IDENTITY(1,1),
+    export_date DATE NOT NULL DEFAULT GETDATE(),
+    purpose  NVARCHAR(200)
+);
+4.2.10. Tạo bảng ExportDetail
+Quan hệ chi tiết nhập kho
+-- Lệnh tạo bảng ExportDetail
+CREATE TABLE ExportDetail (
+    export_detail_id INT PRIMARY KEY IDENTITY(1,1),
+    export_id INT NOT NULL FOREIGN KEY REFERENCES ExportReceipt(export_id),
+    sku_id INT NOT NULL 
+    FOREIGN KEY REFERENCES Sku(sku_id),
+    location_id INT NOT NULL 
+    FOREIGN KEY REFERENCES StorageLocation(location_id),
+    quantity INT NOT NULL                     
+);
+4.2.11. Tạo bảng Inventory
+-- Quan hệ tồn kho
+-- Lệnh tạo bảng Inventory
+CREATE TABLE Inventory (
+    location_id INT NOT NULL 
+    FOREIGN KEY REFERENCES StorageLocation(location_id),
+    sku_id INT NOT NULL 
+    FOREIGN KEY REFERENCES Sku(sku_id),
+    quantity INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (location_id, sku_id)
+);
+4.2.12. Tạo bảng Account
+-- Quan hệ tài khoản người dùng
+-- Lệnh tạo bảng Account
+CREATE TABLE Account (
+    account_name NVARCHAR(20) PRIMARY KEY,
+    display_name NVARCHAR(20) NOT NULL DEFAULT N'Quản lý kho',
+    password NVARCHAR(1000) NOT NULL
+);
+4.3. Xây dựng các View
+4.3.1. Khung nhìn hiển thị tồn theo từng vị trí
+-- Khung nhìn tồn kho hiển thị theo từng vị trí
+CREATE VIEW UV_InventoryDetail
+AS
+    SELECT    sl.location_id,sl.location_description,c.category_name,p.product_name,
+s.sku_code,s.unit,i.quantity
+    FROM Inventory as i
+    JOIN StorageLocation as sl on sl.location_id=i.location_id
+    JOIN Sku as s on s.sku_id=i.sku_id
+    JOIN Product as p on s.product_id=p.product_id
+    LEFT JOIN Category as c 
+    ON p.category_id=c.category_id
+GO
+4.3.2. Khung nhìn hiển thị tồn kho theo kho hàng
+-- Khung nhìn hiển thị tồn kho theo kho lưu trữ
+CREATE VIEW UV_HienThiTongKho
+AS
+    SELECT  warehouse_id as N'Mã kho',warehouse_name as N'Tên kho',                 dbo.UF_TongKho (warehouse_id) as N'Số lượng'
+    FROM Warehouse    
+GO
+4.3.3. Khung nhìn hiển thị tồn kho theo vị trí
+-- Khung nhìn hiển thị tồn kho theo vị trí
+CREATE VIEW UV_HienThiLuuTru
+AS
+    SELECT  location_id as N'Mã vị trí',location_description as N'Vị trí lưu trữ',dbo.UF_TongLuuTru (location_id) as N'Số lượng'
+    FROM StorageLocation
+GO
+4.3.4. Khung nhìn hiển thị tồn kho theo biến thể sản phẩm
+-- Khung nhìn hiển thị số lượng tồn theo biến thể sản phẩm
+CREATE VIEW UV_HienThiTongSanPham
+AS
+    SELECT  s.sku_code as N'Sku Code', 
+    dbo.UF_TongSanPham (s.sku_id) as N'Số lượng'
+    FROM Sku as s
+GO
+4.4. Xây dựng các Function
+4.4.1. Hàm tính tổng lưu trữ tại vị trí
+-- Tính tổng lưu trữ tại vị trí
+CREATE FUNCTION UF_TongLuuTru (@LocationID INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @Tong INT
+    SELECT @Tong= SUM(quantity) 
+    FROM Inventory
+    WHERE location_id=@LocationID
+    RETURN @Tong
+END
+GO
+4.4.2. Hàm tính tổng lưu trữ tại kho hàng
+-- Tính tổng lưu trữ tại kho hàng
+CREATE FUNCTION UF_TongKho (@WarehouseID INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @Tong INT
+    SELECT @Tong=SUM(i.quantity) 
+    FROM Inventory as i
+    JOIN StorageLocation as sl
+    ON i.location_id=sl.location_id
+    WHERE sl.warehouse_id=@WarehouseID
+    RETURN @Tong
+END
+GO
+4.4.3. Hàm tính số lượng theo biến thể sản phẩm
+-- Tính số lượng theo biến thể sản phẩm
+CREATE FUNCTION UF_TongSanPham (@SkuID INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @Tong INT
+    SELECT @Tong=SUM(quantity)
+    FROM Inventory
+    WHERE sku_id=@SkuID
+    RETURN @Tong
+END
+GO
+4.5. Xây dựng các Stored Procedure
+4.5.1. Thủ tục đăng nhập
+Thủ tục đăng nhập sử dụng tham số đầu vào là tên đăng nhập và mật khẩu, thực hiện truy vấn quan hệ tài khoản người dùng có tên đăng nhập và mật khẩu tương ứng.
+-- Thủ tục đăng nhập
+CREATE PROCEDURE USP_Login 
+@UserName NVARCHAR(100), 
+@Password NVARCHAR(20)
+AS
+BEGIN
+    SELECT * FROM Account 
+    WHERE account_name=@UserName 
+    AND password=@Password
+END
+GO
+4.5.2. Thủ tục hiển thị vị trí kho lưu trữ
+Thủ tục hiển thị vị trí kho lưu trữ thực hiện truy vấn quan hệ vị trí lưu trữ hiển thị toàn bộ danh sách vị trí lưu trữ.
+-- Thủ tục hiển thị vị trí kho lưu trữ
+CREATE PROCEDURE USP_GetStorageLocation
+AS
+BEGIN
+    SELECT * FROM StorageLocation
+END
+GO
+4.5.3. Thủ tục lấy tồn kho theo từng vị trí
+Thủ tục lấy tồn kho theo từng vị trí nhận tham số đầu vào là mã vị trí lưu trữ, thực hiện truy vấn hiển thị chi tiết tồn kho theo mã vị trí tương ứng. 
+-- Thủ tục lấy tồn kho theo từng vị trí
+CREATE PROCEDURE USP_GetInventoryByLocationID
+@LocationID INT
+AS 
+BEGIN
+    SELECT * FROM UV_InventoryDetail 
+    WHERE location_id=@LocationID
+END
+GO
+4.5.4. Nhóm thủ tục quản lí danh mục
+Bảng 4.1. Các thủ tục quản lí danh mục
+
+=== TABLE START ===
+Thủ tục | Khối lệnh
+Thêm | CREATE PROCEDURE USP_InsertCategory  @CategoryName NVARCHAR(100) AS BEGIN    INSERT INTO Category(category_name) VALUES (@CategoryName) END GO
+Xóa | CREATE PROCEDURE USP_DeleteCategory @CategoryID INT AS BEGIN     BEGIN Tran XoaDanhMuc     BEGIN TRY     UPDATE Product SET category_id = NULL      WHERE category_id = @CategoryID     DELETE FROM Category WHERE category_id = @CategoryID     COMMIT TRAN XoaDanhMuc     END TRY     BEGIN CATCH     ROLLBACK TRAN XoaDanhMuc     END CATCH END GO
+Sửa | CREATE PROCEDURE USP_UpdateCategory @CategoryID INT, @CategoryName NVARCHAR(100) AS BEGIN     UPDATE Category SET category_name=ISNULL(@CategoryName,category_name)      WHERE category_id=@CategoryID END GO
+Hiển thị | CREATE PROCEDURE USP_ListCategory AS BEGIN     SELECT * FROM Category END GO
+Truy vấn theo mã định danh | CREATE PROCEDURE USP_GetCategoryByID @CategoryID INT AS BEGIN     SELECT * FROM Category WHERE category_id=@CategoryID END GO
+Tìm kiếm | CREATE PROCEDURE USP_SearchCategoryByName  @CategoryName NVARCHAR(100) AS BEGIN     SELECT * FROM Category WHERE category_name      Like '%'+@CategoryName+'%' END GO
+=== TABLE END ===
+
+4.5.5. Nhóm thủ tục quản lí sản phẩm
+Bảng 4.2. Các thủ tục quản lí sản phẩm
+
+=== TABLE START ===
+Thủ tục | Khối lệnh
+Thêm | CREATE PROCEDURE USP_InsertProduct @ProductName NVARCHAR(100),@Description NVARCHAR(100),@CategoryID INT AS BEGIN     INSERT INTO Product(product_name,description,category_id)     VALUES (@ProductName,@Description,@CategoryID)                      END GO
+Xóa | CREATE PROCEDURE USP_DeleteProduct @ProductID INT AS BEGIN     DELETE FROM PRODUCT WHERE product_id=@ProductID END GO
+Sửa | CREATE PROCEDURE USP_UpdateProduct @ProductID INT,@ProductName NVARCHAR(100),@Description NVARCHAR(100),@CategoryID INT AS BEGIN     UPDATE PRODUCT      SET product_name=ISNULL(@ProductName,product_name), description=ISNULL(@Description,description), category_id=ISNULL(@CategoryID,category_id)     WHERE product_id=@ProductID END GO
+Hiển thị | CREATE PROCEDURE USP_ListProduct AS BEGIN     SELECT * FROM Product END GO
+Truy vấn theo mã định danh | CREATE PROCEDURE USP_GetProductByID @ProductID INT AS BEGIN     SELECT * FROM Product     WHERE product_id=@ProductID END GO
+Tìm kiếm | CREATE PROCEDURE USP_SearchProductByName @ProductName NVARCHAR(100) AS BEGIN     SELECT * FROM Product     WHERE product_name like '%'+@ProductName+'%' END GO
+=== TABLE END ===
+
+4.5.6. Nhóm thủ tục quản lí biến thể sản phẩm
+Bảng 4.3. Các thủ tục quản lí biến thể sản phẩm
+
+=== TABLE START ===
+Thủ tục | Khối lệnh
+Thêm | -- Thủ tục thêm biến thể sản phẩm CREATE PROCEDURE USP_InsertSku @SkuCode NVARCHAR(100),  @Unit NVARCHAR(50), @ProductID INT AS BEGIN     INSERT INTO Sku(sku_code,unit,product_id)      VALUES (@SkuCode,@Unit,@ProductID) END GO
+Xóa | CREATE PROCEDURE USP_DeleteSku @SkuID INT AS BEGIN     DELETE FROM Sku WHERE sku_id=@SkuID  END GO
+Sửa | CREATE PROCEDURE USP_UpdateSku @SkuID INT,@SkuCode NVARCHAR(100), @Unit NVARCHAR(50), @ProductID INT AS BEGIN     UPDATE Sku SET  sku_code=ISNULL(@SkuCode,sku_code), unit=ISNULL(@Unit,unit),product_id=ISNULL(@ProductID,product_id)     WHERE sku_id=@SkuID END GO
+Hiển thị | CREATE PROCEDURE USP_ListSku AS BEGIN     SELECT * FROM Sku END GO
+Truy vấn theo mã định danh | CREATE PROCEDURE USP_GetSkuByID @SkuID INT AS BEGIN     SELECT * FROM Sku     WHERE sku_id=@SkuID END GO
+Tìm kiếm | CREATE PROCEDURE USP_SearchSkuByName @SkuCode NVARCHAR(100) AS BEGIN     SELECT * FROM Sku     WHERE sku_code LIKE '%'+@SkuCode+'%' END GO
+=== TABLE END ===
+
+4.5.7. Nhóm thủ tục quản lí kho hàng
+Bảng 4.4. Các thủ tục quản lí kho hàng
+
+=== TABLE START ===
+Thủ tục | Khối lệnh
+Thêm | --- Thên kho hàng CREATE PROCEDURE USP_InsertWarehouse @WarehouseName NVARCHAR(100), @Address NVARCHAR(255), @MaxCapacity INT AS BEGIN     INSERT INTO          Warehouse(warehouse_name,address,max_capacity)      VALUES(@WarehouseName,@Address,@MaxCapacity) END GO
+Xóa | --- Xóa kho hàng CREATE PROCEDURE USP_DeleteWarehouse @WarehouseID INT AS BEGIN     DELETE FROM Warehouse     WHERE warehouse_id=@WarehouseID END GO
+Sửa | CREATE PROCEDURE USP_UpdateWarehouse @WarehouseID INT,@WarehouseName NVARCHAR(100),@Address NVARCHAR(255), @MaxCapacity INT AS BEGIN BEGIN TRANSACTION BEGIN TRY     UPDATE Warehouse      SET warehouse_name=ISNULL(@WarehouseName,warehouse_name),     address=ISNULL(@Address,address),     max_capacity=ISNULL(@MaxCapacity,max_capacity)     WHERE warehouse_id=@WarehouseID     DECLARE @Tong INT,@SucChuaToiDa INT     SELECT @SucChuaToiDa=max_capacity FROM Warehouse      WHERE warehouse_id=@WarehouseID     SELECT @Tong=ISNULL(SUM(capacity),0)     FROM StorageLocation WHERE warehouse_id=@WarehouseID     IF( @SucChuaToiDa> @Tong or @SucChuaToiDa = @Tong)     BEGIN         PRINT N'Cập nhật kho hàng thành công'         COMMIT TRANSACTION     END     ELSE     BEGIN         PRINT N'Vượt quá sức chứa kho hàng'         ROLLBACK TRANSACTION     END END TRY BEGIN CATCH     PRINT N'Cập nhật kho hàng không thành công'     ROLLBACK TRANSACTION END CATCH END GO
+Hiển thị | CREATE PROCEDURE USP_ListWarehouse AS BEGIN     SELECT * FROM Warehouse END GO
+Truy vấn theo mã định danh | CREATE PROCEDURE USP_GetWarehouseByID  @WarehouseID INT AS BEGIN     SELECT * FROM Warehouse      WHERE warehouse_id=@WarehouseID END GO
+Tìm kiếm | --- Tìm kiếm nhà cung cấp theo tên CREATE PROCEDURE USP_SearchWarehouseByName  @WarehouseName NVARCHAR(100) AS BEGIN     SELECT * FROM Warehouse      WHERE warehouse_name LIKE '%'+@WarehouseName+'%' END GO
+=== TABLE END ===
+
+4.5.8. Nhóm thủ tục quản lí vị trí lưu trữ
+Bảng 4.5. Các thủ tục quản lí vị trí lưu trữ
+
+=== TABLE START ===
+Thủ tục | Khối lệnh
+Thêm | --- Thêm vị trí lưu kho CREATE PROCEDURE USP_InsertStorageLocation @Description NVARCHAR(150), @Capacity INT,  @WarehouseID INT  AS BEGIN BEGIN TRANSACTION BEGIN TRY     INSERT INTO     StorageLocation(location_description,capacity,warehouse_id)       VALUES(@Description,@Capacity,@WarehouseID)     DECLARE @Tong INT,@SucChuaToiDa INT     SELECT @SucChuaToiDa=max_capacity FROM Warehouse      WHERE warehouse_id=@WarehouseID     SELECT @Tong=ISNULL(SUM(capacity),0)     FROM StorageLocation WHERE warehouse_id=@WarehouseID     IF( @SucChuaToiDa> @Tong or @SucChuaToiDa = @Tong)     BEGIN         COMMIT TRANSACTION     END     ELSE     BEGIN         ROLLBACK TRANSACTION     END END TRY BEGIN CATCH     PRINT N'Thêm vị trí lưu trữ thất bại'     ROLLBACK TRANSACTION END CATCH END  GO
+Xóa | CREATE PROCEDURE USP_DeleteStorageLocation @LocationID INT AS BEGIN     BEGIN TRANSACTION     BEGIN TRY     DELETE FROM StorageLocation WHERE location_id=@LocationID     COMMIT TRANSACTION     END TRY     BEGIN CATCH     ROLLBACK TRANSACTION     END CATCH END GO
+Sửa | CREATE PROCEDURE USP_UpdateStorageLocation @LocationID INT,@Description NVARCHAR(150),@Capacity INT, @WarehouseID INT AS BEGIN     BEGIN TRANSACTION     BEGIN TRY     UPDATE StorageLocation SET  location_description=ISNULL(@Description,location_description),     capacity=ISNULL(@Capacity,capacity),     warehouse_id=ISNULL(@WarehouseID,warehouse_id)     WHERE location_id=@LocationID     DECLARE @Tong INT,@SucChuaToiDa INT,@Quantity INT,     @SucChua INT     SELECT @SucChuaToiDa=max_capacity FROM Warehouse      WHERE warehouse_id      IN (SELECT warehouse_id FROM StorageLocation      WHERE location_id=@LocationID)     SELECT @Tong=ISNULL(SUM(capacity),0)     FROM StorageLocation      WHERE warehouse_id IN (SELECT warehouse_id      FROM StorageLocation WHERE location_id=@LocationID)     SET @Quantity=dbo.UF_TongLuuTru(@LocationID)     SELECT @SucChua=capacity FROM StorageLocation      WHERE location_id=@LocationID     IF( @SucChuaToiDa>= @Tong and @SucChua >= @Quantity)         COMMIT TRANSACTION     ELSE     BEGIN         ROLLBACK TRANSACTION     END     END TRY     BEGIN CATCH     ROLLBACK TRANSACTION     END CATCH END GO
+Tìm kiếm | CREATE PROCEDURE USP_SearchLocationByDescription @Description NVARCHAR(100) AS BEGIN     SELECT * FROM StorageLocation WHERE location_description     LIKE '%'+@Description+'%'    END GO
+=== TABLE END ===
+
+4.5.9. Nhóm thủ tục quản lí nhà cung cấp
+Bảng 4.6. Các thủ tục quản lí nhà cung cấp
+
+=== TABLE START ===
+Thủ tục | Khối lệnh
+Thêm | CREATE PROCEDURE USP_InsertSupplier @SupplierName NVARCHAR(100),  @Address NVARCHAR(100), @Email NVARCHAR(255),@Phone NVARCHAR(50)  AS BEGIN     INSERT INTO Supplier(supplier_name, address,email,phone)     VALUES(@SupplierName,@Address,@Email,@Phone) END GO
+Xóa | CREATE PROCEDURE USP_DeleteSupplier  @SupplierID INT  AS BEGIN     DELETE FROM Supplier WHERE supplier_id=@SupplierID END GO
+Sửa | CREATE PROCEDURE USP_UpdateSupplier @SupplierID INT, @SupplierName NVARCHAR(100),  @Address NVARCHAR(100), @Email NVARCHAR(255), @Phone NVARCHAR(50) AS BEGIN     UPDATE Supplier     SET supplier_name=ISNULL(@SupplierName,supplier_name),         address=ISNULL(@Address,address),         email=ISNULL(@Email,email),         phone=ISNULL(@Phone,phone)     WHERE supplier_id=@SupplierID END GO
+Hiển thị | --- Hiển thị danh sách nhà cung cấp CREATE PROCEDURE USP_ListSupplier  AS BEGIN     SELECT * FROM Supplier  END GO
+Truy vấn theo mã định danh | --- Truy vấn nhà cung cấp theo mã nhà cung cấp CREATE PROCEDURE USP_GetSupplierByID  @SupplierID INT  AS BEGIN     SELECT * FROM Supplier      WHERE supplier_id=@SupplierID END GO
+Tìm kiếm | --- Tìm kiếm nhà cung cấp theo têb CREATE PROCEDURE USP_SearchSupplierByName @SupplierName NVARCHAR(100)  AS BEGIN     SELECT * FROM Supplier WHERE supplier_name      LIKE '%'+@SupplierName+'%' END GO
+=== TABLE END ===
+
+4.5.10. Nhóm thủ tục quản lí nhập kho
+Bảng 4.7. Các thủ tục quản lí nhập kho
+
+=== TABLE START ===
+Thủ tục | Khối lệnh
+Tạo phiếu | --- Thêm phiếu nhập CREATE PROCEDURE USP_InsertImportReceipt  AS BEGIN     BEGIN TRANSACTION     BEGIN TRY         --- Thêm phiếu nhập với giá trị mặc định         INSERT INTO ImportReceipt DEFAULT VALUES         COMMIT TRANSACTION     END TRY     BEGIN CATCH          --- Thực hiện rollback nếu có lỗi          ROLLBACK TRANSACTION     END CATCH END GO
+Tạo chi tiết phiếu | --- Thêm dòng chi tiết nhập kho --- Cập nhật tồn kho CREATE PROCEDURE USP_InsertImportDetail @ImportID INT,  @SkuID INT,  @SupplierID INT,  @LocationID INT,  @Quantity INT  AS BEGIN --- Bắt đầu giao dịch BEGIN TRANSACTION BEGIN TRY --- Thêm dòng chi tiết nhập kho INSERT INTO ImportDetail (import_id,sku_id,supplier_id,location_id,quantity)  VALUES (@ImportID,@SkuID,@SupplierID,@LocationID,@Quantity) --- Cập nhật tồn kho  UPDATE Inventory  SET quantity=quantity+@Quantity  WHERE location_id=@LocationID  AND sku_id=@SkuID --- Xác nhận giao dịch     COMMIT TRANSACTION     END TRY     BEGIN CATCH             --- Rollback khi có lỗi             ROLLBACK TRANSACTION     END CATCH END GO
+Hiển thị | --- Thống kê phiếu nhập theo ngày tháng CREATE PROCEDURE USP_GetImportReceiptByDate    --- Ngày bắt đầu    @NgayBatDau Date,     --- Ngày kết thúc    @NgayKetThuc Date AS BEGIN     --- Truy vấn phiếu nhập theo điều kiện     SELECT * FROM ImportReceipt      WHERE import_date      BETWEEN @NgayBatDau      AND @NgayKetThuc END GO
+=== TABLE END ===
+
+4.5.11. Nhóm thủ tục quản lí xuất kho
+Bảng 4.8. Các thủ tục quản lí xuất kho
+
+=== TABLE START ===
+Thủ tục | Khối lệnh
+Tạo phiếu | ---Thêm phiếu xuất CREATE PROCEDURE USP_InsertExportReceipt @Purpose NVARCHAR(155) AS BEGIN     BEGIN TRANSACTION     BEGIN TRY         INSERT INTO ExportReceipt (purpose)         VALUES (ISNULL(@Purpose,N'Xuất kho'))         COMMIT TRANSACTION     END TRY     BEGIN CATCH         ROLLBACK TRANSACTION     END CATCH END GO
+Tạo chi tiết phiếu | --- Thêm chi tiết phiếu nhập --- Cập nhật tồn kho CREATE PROCEDURE USP_InsertExportDetail @ExportID INT,  @SkuID INT,  @LocationID INT,  @Quantity INT AS BEGIN     --- Bắt dầu giao dịch     BEGIN TRANSACTION     BEGIN TRY         --- Thêm dòng chi tiết xuất kho         INSERT INTO         ExportDetail(export_id,sku_id,location_id,quantity)         VALUES (@ExportID,@SkuID,@LocationID,@Quantity)         UPDATE Inventory          SET quantity=quantity-@Quantity          WHERE location_id=@LocationID          AND sku_id=@SkuID         COMMIT TRANSACTION     END TRY     BEGIN CATCH         ROLLBACK TRANSACTION     END CATCH END GO
+Hiển thị | CREATE PROCEDURE USP_GetExportReceiptByDate @NgayBatDau Date,  @NgayKetThuc Date AS BEGIN     SELECT * FROM ExportReceipt WHERE export_date      BETWEEN @NgayBatDau AND @NgayKetThuc END GO
+=== TABLE END ===
+
+4.6. Xây dựng các Trigger
+4.6.1. Bẫy lỗi vượt sức chứa vị trí lưu trữ
+Bẫy lỗi được cài đặt để kiểm tra các truy vấn thêm, cập nhật vị trí lưu trữ nhằm tuân thủ nghiệp vụ tổng sức chứa tại các vị trí lưu trữ không vượt sức kho.
+CREATE TRIGGER UT_CheckStorageLocation ON StorageLocation 
+AFTER INSERT, UPDATE AS
+BEGIN
+    -- Kiểm tra tổng các sức chứa có vượt quá sức chứa tối đa của kho hàng
+    IF EXISTS ( SELECT * FROM inserted i JOIN Warehouse w 
+    ON i.warehouse_id=w.warehouse_id
+        WHERE (
+            SELECT ISNULL(SUM(capacity),0)
+            FROM StorageLocation WHERE warehouse_id = i.warehouse_id
+        ) > w.max_capacity
+    )
+    BEGIN
+        PRINT N'Vượt quá sức chứa kho'
+        ROLLBACK TRANSACTION
+        RETURN
+    END
+    -- Kiểm tra tổng sức chứa vượt quá vị trí lưu lưu trữ
+    IF EXISTS (
+        SELECT 1 FROM inserted i
+        WHERE i.capacity < dbo.UF_TongLuuTru(i.location_id)
+    )
+    BEGIN
+        PRINT N'Vị trí lưu trữ vượt quá sức chứa'
+        ROLLBACK TRANSACTION
+    END
+END
+GO
+4.6.2. Bẫy lỗi vượt sức chứa kho
+Bẫy lỗi được cập nhật để kiểm tra các thao tác truy vấn cập nhật sức chứa kho, đảm bảo quy tắc nghiệp vụ tổng sức chứa tại các vị trí lưu trữ không vượt sức kho.
+CREATE TRIGGER UT_CheckMaxCapacity ON Warehouse 
+AFTER UPDATE 
+AS
+BEGIN
+    IF EXISTS (
+        SELECT * FROM inserted as i
+        WHERE max_capacity < (SELECT ISNULL(SUM(capacity),0)
+        FROM StorageLocation 
+        WHERE warehouse_id=i.warehouse_id)
+        )
+    BEGIN
+        PRINT N'Vị trí lưu trữ vượt quá sức chứa'
+        ROLLBACK TRANSACTION
+    END
+END
+GO
+4.6.3. Bẫy lỗi nhập kho vượt sức chứa
+Bẫy lỗi được cài đặt để kiểm tra các thao tác nhập hàng, cập nhật tồn kho nhằm đảm bảo số lượng nhập không vượt quá sức chứa lưu trữ tại vị trí. Nếu bẫy lỗi thành công thủ tục thêm dòng chi tiết nhập hàng và cập nhật tồn kho được hoàn tác.
+CREATE TRIGGER UT_CheckCapacity
+ON Inventory
+AFTER UPDATE
+AS
+BEGIN
+    IF EXISTS(
+        SELECT * FROM inserted as i
+        JOIN StorageLocation as sl
+        ON i.location_id=sl.location_id
+        WHERE capacity < ISNULL(dbo.UF_TongLuuTru(sl.location_id),0)
+    )
+    BEGIN
+        PRINT N'Nhập hàng vượt quá sức chứa'
+        ROLLBACK TRANSACTION
+    END
+END
+GO
+4.6.4. Bẫy lỗi xuất kho không đủ số lượng
+Bẫy lỗi được cài đặt để kiểm tra thao tác xuất kho, cập nhật tồn kho nhằm đảm bảo số lượng xuất không vượt quá tồn kho hiện tại. Nếu bẫy lỗi thành công, giao dịch thêm dòng chi tiết xuất hàng và cập nhật tồn kho sẽ được hoàn tác.
+CREATE TRIGGER UT_CheckInventory ON Inventory AFTER UPDATE 
+AS
+BEGIN
+    IF EXISTS(SELECT * FROM inserted as i WHERE i.quantity < 0)
+    BEGIN
+        PRINT N'Số lượng không đủ'
+        ROLLBACK TRANSACTION
+    END
+END
+GO
+4.7. Xác định tình huống tranh chấp
+Bảng 4.9. Các vấn đề khi truy cập đồng thời
+
+=== TABLE START ===
+Thao tác | User | Thao tác | User | Vấn đề | Lỗi trang chấp
+Nhập hàng | Quản lý | Xuất hàng | Thủ kho | Lost Update | Xuất, nhập kho thực hiện cùng lúc gây mất dữ liệu cập nhật.
+Nhập hàng | Quản lý | Xuất hàng | Thủ kho | Dirty Read | Xuất kho cùng lúc nhập kho chưa xác nhận gây ra đọc dữ liệu rác.
+Cập nhật thông tin | Quản lý | Tìm kiếm | Thủ kho | Non-repeatable Read | Tìm kiếm thực hiện lúc cập nhật gây ra không đọc lại được dữ liệu.
+Hiển thị sản phẩm | Quản lý | Thêm sản phẩm | Thủ Kho | Phantom | Hiển thị danh sách sản phẩm khi nhập kho có thể gây ra vấn đề bóng ma, do xuất hiện thêm bản ghi mới giữa các lần truy vấn.
+Xuất hàng | Quản lý | Hủy chi tiết xuất | Thủ kho | Deadlock | Xuất hàng thực hiện đồng thời hủy chi tiết xuất gây ra khóa chết.
+=== TABLE END ===
+
+4.7. Cài đặt tình huống tranh chấp
+4.7.1. Cài đặt mất dữ liệu cập nhật
+Tình huống quản lý thực hiện nhập hàng cùng lúc thủ kho thực hiện xuất hàng dẫn đến vấn đề mất cập nhật dữ liệu.
+-- Thủ tục tạo chi tiết nhập kho và cập nhật tồn kho
+CREATE PROCEDURE USP_NhapKho
+@ImportID INT, @SkuID INT, @SupplierID INT, @LocationID INT, @Quantity INT AS BEGIN
+BEGIN TRANSACTION
+INSERT INTO ImportDetail (import_id,sku_id,supplier_id,location_id, quantity) VALUES (@ImportID,@SkuID,@SupplierID,@LocationID,@Quantity)
+IF(@@ERROR <> 0)
+BEGIN ROLLBACK TRAN RETURN END
+DECLARE @SoDu INT SELECT @SoDu=quantity FROM Inventory 
+WHERE location_id=@LocationID and sku_id=@SkuID
+WAITFOR DELAY '00:00:10'
+Update Inventory
+SET quantity= @SoDu+@Quantity WHERE location_id=@LocationID and sku_id=@SkuID
+IF(@@ERROR <> 0)
+BEGIN ROLLBACK TRAN RETURN END COMMIT TRANSACTION
+END
+GO
+Chú thích: Chức năng nhập kho
+-- Thủ tục tạo chi tiết xuất kho và cập nhật tồn kho
+CREATE PROCEDURE USP_XuatKho @ImportID INT,@SkuID INT,@LocationID INT, @Quantity INT AS
+BEGIN
+BEGIN TRANSACTION
+INSERT INTO ExportDetail(export_id,sku_id,location_id,quantity) 
+VALUES (@ImportID,@SkuID,@LocationID,@Quantity)
+IF(@@ERROR <> 0)
+BEGIN ROLLBACK TRAN RETURN END
+DECLARE @SoDu INT SELECT @SoDu=quantity FROM Inventory WITH (NOLOCK)
+WHERE location_id=@LocationID AND sku_id=@SkuID
+WAITFOR DELAY '00:00:15'
+IF(@Quantity > @SoDu)
+BEGIN ROLLBACK TRAN RETURN END
+Update Inventory SET quantity=@SoDu-@Quantity WHERE location_id=@LocationID 
+AND sku_id=@SkuID
+IF(@@ERROR <> 0)
+BEGIN ROLLBACK TRAN RETURN END
+COMMIT TRANSACTION
+END
+GO
+Chú thích: Chức năng xuất kho
+Hình 4.1. Sơ đồ tuần tự thực hiện nhập hàng và xuất hàng
+4.7.2. Cài đặt đọc dữ liệu rác
+Hành động ghi nhận chi tiết nhập và cập nhật tồn kho vượt sức chứa bị hoàn tác cùng lúc thao tác xuất kho kiểm tra điều kiện và cập nhật tồn kho dẫn đến vấn đề đọc dữ liệu rác.
+Bảng 4.11. Hai giao tác nhập hàng và kiểm tra tồn kho
+
+=== TABLE START ===
+Thời điểm | T1 | T2
+t1 | Read(quantity)
+t2 | quantity = 100 + 50
+t3 | Write(quantity)
+t4 | Read(quantity)
+t5 | quantity = 100 – 50
+t6 | Write(quantity)
+t7 | Abort
+=== TABLE END ===
+
+Chú thích: Cho hai giao tác T1, T2 và đơn vị dữ liệu quantity=100.
+Hình 4.2. Sơ đồ tuần tự thực hiện nhập hàng và kiểm tra tồn kho
+4.7.3. Cài đặt không đọc lại được dữ liệu
+Tình huống quản lý tìm kiếm thông tin nhà cung cấp cùng lúc thủ kho thực hiện hành động cập nhật thông tin nhà cung cấp dẫn đến vấn đề không đọc lại được dữ liệu.
+// Tìm kiếm nhà cung cấp theo tên và số điện thoại
+CREATE PROCEDURE USP_SearchSupplier 
+@SupplierName NVARCHAR(100), @Phone NVARCHAR(50)
+AS
+BEGIN
+    BEGIN TRANSACTION
+    IF NOT EXISTS 
+    ( SELECT * FROM Supplier 
+    WHERE supplier_name=@SupplierName AND phone=@Phone)
+    BEGIN
+        PRINT('Không tìm thấy')
+        ROLLBACK TRAN
+        RETURN
+    END
+    WAITFOR DELAY '00:00:10'
+    SELECT * FROM Supplier 
+    WHERE supplier_name=@SupplierName AND phone=@Phone
+    COMMIT TRAN
+END
+GO
+Chú thích: Chức năng tìm kiếm nhà cung cấp theo tên và số điện thoại
+--- Cập nhật thông tin nhà cung cấp
+CREATE PROCEDURE USP_UpdateSupplier
+@SupplierID INT,@SupplierName NVARCHAR(100), @Address NVARCHAR(100),
+@Email NVARCHAR(255), @Phone NVARCHAR(50) AS
+BEGIN
+    BEGIN TRAN
+    UPDATE Supplier SET 
+    supplier_name=ISNULL
+    (@SupplierName,supplier_name),
+    address=ISNULL(@Address,address),
+    email=ISNULL(@Email,email),
+    phone=ISNULL(@Phone,phone)
+    WHERE supplier_id=@SupplierID
+    IF(@@ERROR <> 0)
+    BEGIN
+    ROLLBACK TRAN
+    RETURN
+    END
+    COMMIT TRANSACTION
+END
+GO
+COMMIT TRANSACTION
+END
+GO
+Chú thích: Chức năng cập nhật nhà cung cấp
+Bảng 4.13. Hai giao tác tìm kiếm và cập nhật thông tin
+
+=== TABLE START ===
+Thời điểm | T1 | T2
+t1 | Read(record)
+t2 | Read(record)
+t3 | supplier_name = @SupplierName phone = @Phone
+t4 | Print(record)
+t5 | Write(record)
+t6 | Read(record)
+t7 | Print(record)
+=== TABLE END ===
+
+Chú thích: Cho hai giao tác T1, T2 và đơn vị dữ liệu record.
+Hình 4.3. Sơ đồ tuần tự thực hiện cập nhật và tìm kiếm
+4.7.4. Cài đặt bóng ma
+Tình huống xảy ra khi hiển thị danh sách  sản phẩm thuộc một danh mục cụ thể cùng lúc thêm mới một sản phẩm vào cùng danh mục đó gây ra vấn đề bóng ma.
+CREATE PROCEDURE USP_ListProductByCondition @CategoryID INT AS
+BEGIN
+    BEGIN TRAN
+    IF NOT EXISTS (SELECT * FROM Product WHERE category_id=@CategoryID)
+    BEGIN
+        PRINT('Không tìm thấy')
+        ROLLBACK TRAN
+        RETURN
+    END
+    ELSE
+    BEGIN
+    DECLARE @Count INT SELECT @Count=COUNT(*) FROM Product 
+    WHERE category_id=@CategoryID PRINT CAST(@Count,NVARCHAR) + 'sản phẩm'
+    END WAITFOR DELAY '00:00:10'
+    SELECT * FROM Product WHERE category_id=@CategoryID
+    COMMIT TRANSACTION
+END
+GO
+Chú thích: Chức năng hiển thị danh sách sản phẩm theo mã danh mục cụ thể
+-- Thủ tục thêm sản phẩm
+CREATE PROCEDURE USP_InsertProduct
+@ProductName NVARCHAR(100),
+@Description NVARCHAR(100),
+@CategoryID INT
+AS
+BEGIN
+    -- Bắt đầu một giao tác
+    BEGIN TRANSACTION
+        -- Thêm một dòng sản phẩm vào bảng sản phẩm 
+        INSERT INTO 
+        Product
+        (product_name,description,category_id) 
+        VALUES 
+        (@ProductName,@Description,@CategoryID )
+        -- Trường hợp gặp lỗi
+        IF(@@ERROR <> 0)
+        BEGIN
+        Print('Thêm sản phẩm không thành công')
+        -- Hoàn tác giao dịch
+        ROLLBACK TRAN
+        RETURN
+        END
+    -- Xác nhận giao tác
+    COMMIT TRANSACTION
+END
+GO
+Chú thích: Chức năng thêm sản phẩm theo mã danh mục cụ thể
+Bảng 4.14. Hai giao tác tìm kiếm và cập nhật thông tin
+
+=== TABLE START ===
+Thời điểm | T1 | T2
+t1 | Read(A)
+t2 | Print(A)
+t3 | Write(Aᵢ)
+t4 | Read(A)
+t5 | Print(A)
+=== TABLE END ===
+
+Chú thích: Cho hai giao tác T1, T2 và tập hợp các đơn vị dữ liệu A.
+Hình 4.4. Sơ đồ tuần tự hiển thị và thêm sản phẩm
+4.7.5. Cài đặt khóa chết
+Tình huống xảy ra khi hai giao tác xuất kho thực hiển cùng lúc hủy chi tiết xuất thực hiện trên cùng dữ liệu nhưng truy cập tài nguyên theo thứ tự khác nhau, gây ra khóa chết.
+-- Thêm dòng chi tiết xuất hàng và cập nhật tồn kho
+CREATE PROCEDURE USP_InsertExportDetail
+@ExportID INT, @SkuID INT, @LocationID INT, @Quantity INT AS
+BEGIN
+    BEGIN TRANSACTION
+    BEGIN TRY
+        UPDATE Inventory SET quantity=quantity-@Quantity
+        WHERE location_id=@LocationID and sku_id=@SkuID
+        WAITFOR DELAY '00:00:05'
+        INSERT INTO ExportDetail(export_id,sku_id,location_id,quantity)
+        VALUES (@ExportID,@SkuID,@LocationID,@Quantity)
+        COMMIT TRANSACTION
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION
+    END CATCH
+END
+GO
+Chú thích: Chức năng thêm dòng chi tiết xuất kho và cập nhật tồn kho
+-- Hủy chi tiết xuất kho
+CREATE PROCEDURE USP_CancelExportDetail
+@ExportDetailID INT, 
+@SkuID INT, 
+@LocationID INT, 
+@Quantity INT
+AS
+BEGIN
+    BEGIN TRANSACTION
+    BEGIN TRY
+        -- 1. Xóa chi tiết phiếu xuất trước
+        DELETE FROM ExportDetail
+        WHERE export_detail_id=@ExportDetailID
+        -- Chờ 5 giây tạo Deadlock
+        WAITFOR DELAY '00:00:05'
+        -- 2. Cộng trả lại tồn kho sau
+        UPDATE Inventory
+        SET quantity=quantity+@Quantity
+        WHERE location_id=@LocationID 
+        AND sku_id=@SkuID
+        COMMIT TRANSACTION
+    END TRY
+    BEGIN CATCH
+        -- Hoàn tác giao dịch
+        ROLLBACK TRANSACTION
+    END CATCH
+END
+GO
+Chú thích: Chức năng hủy dòng chi tiết xuất kho
+Bảng 4.15. Hai giao tác xuất kho và hủy chi tiết xuất
+
+=== TABLE START ===
+Thời điểm | T1 | T2
+t1 | Lock(Inventory)
+t2 | Update(Inventory)
+t3 | Lock(ExportDetail)
+t4 | Delete(ExportDetail)
+t5 | Lock(ExportDetail)
+t6 | Lock(Inventory)
+=== TABLE END ===
+
+Chú thích: Cho hai giao tác T1, T2 và thực hiện trên các bảng dữ liệu.
+4.8. Xử lí tình huống tranh chấp
+4.8.1. Mất dữ liệu cập nhật
+Trong hệ thống quản lý kho, hiện tượng mất dữ liệu cập nhật xảy ra khi nhiều giao dịch đồng thời cùng đọc và ghi đè kết quả cập nhật tồn kho, dẫn đến việc dữ liệu bị ghi đè. Để khắc phục, hệ thống sử dụng transaction kết hợp với khóa UPDLOCK và ROWLOCK nhằm khóa bản ghi trong quá trình đọc và ghi, đảm bảo không có giao dịch khác can thiệp.
+-- Thêm dòng chi tiết nhập kho và cập nhật tồn kho
+CREATE PROCEDURE USP_NhapKho_Fix
+    @ImportID INT,
+    @SkuID INT,
+    @SupplierID INT,
+    @LocationID INT,
+    @Quantity INT
+AS
+BEGIN
+    DECLARE @SoDu INT
+    BEGIN TRAN
+    INSERT INTO 
+    ImportDetail(import_id, sku_id, supplier_id, location_id, quantity)
+    VALUES (@ImportID, @SkuID, @SupplierID, @LocationID, @Quantity)
+    -- Khóa ghi + giữ đến cuối
+    SELECT @SoDu = quantity
+    FROM Inventory 
+    WITH (UPDLOCK, HOLDLOCK)
+    WHERE location_id = @LocationID 
+    AND sku_id = @SkuID
+    --- Gán giá trị mới cho biến số dư
+    SET @SoDu = ISNULL(@SoDu, 0) + @Quantity
+    --- Cập nhật tồn kho
+    UPDATE Inventory
+    SET quantity = @SoDu
+    WHERE location_id = @LocationID 
+    AND sku_id = @SkuID
+    WAITFOR DELAY '00:00:10'
+    COMMIT
+END
+GO
+Chú thích: Chức năng nhập kho sau sửa lỗi
+CREATE PROCEDURE USP_XuatKho_Fix @ExportID INT,@SkuID INT,@LocationID INT,
+@Quantity INT AS
+BEGIN
+    DECLARE @SoDu INT
+    BEGIN TRAN
+    SELECT @SoDu = quantity FROM Inventory WITH (UPDLOCK, HOLDLOCK)
+    WHERE location_id = @LocationID AND sku_id = @SkuID
+    IF (@SoDu >= @Quantity)
+    BEGIN
+        UPDATE Inventory SET quantity = quantity - @Quantity
+        WHERE location_id = @LocationID AND sku_id = @SkuID
+        INSERT INTO ExportDetail(export_id, sku_id, location_id, quantity)
+        VALUES (@ExportID, @SkuID, @LocationID, @Quantity)
+    END
+    COMMIT
+END
+GO
+Chú thích: Chức năng xuất kho sau sửa lỗi
+Nhờ đó, các chức năng nhập kho và xuất kho đều xử lý an toàn: dữ liệu tồn kho được khóa trước khi cập nhật, kiểm tra hợp lệ đối với xuất kho và rollback khi có lỗi. Giải pháp này giúp đảm bảo dữ liệu chính xác và tuân thủ tính nhất quán trong hệ quản trị cơ sở dữ liệu.
+Bảng 4.16. Giải pháp sử dụng khóa ghi tránh mất cập nhật dữ liệu tồn kho
+
+=== TABLE START ===
+Thời điểm | T1 | T2 | X | Y
+t1 | Write_Lock(Inventory) | 100 | 50
+t2 | Read(Inventory) | 100 | 50
+t3 | Write(Inventory) | 150 | 50
+t4 | Write_Lock(Inventory) | 150 | 50
+t5 | Unlock(Inventory) | 150 | 50
+t6 | Read(Inventory) | 150 | 50
+t7 | Write(Inventory) | 100 | 50
+t8 | Unlock(Inventory) | 100 | 50
+=== TABLE END ===
+
+4.8.2. Đọc dữ liệu rác
+ALTER PROCEDURE USP_XuatKho 
+@ExportID INT,
+@SkuID INT, 
+@LocationID INT, 
+@Quantity INT 
+AS
+BEGIN
+    BEGIN TRANSACTION 
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+    INSERT INTO ExportDetail(export_id, sku_id, location_id, quantity)
+    VALUES (@ExportID, @SkuID, @LocationID, @Quantity)
+    IF(@@ERROR <> 0) 
+    BEGIN 
+    ROLLBACK TRAN 
+    RETURN 
+    END
+    DECLARE @SoDu INT SELECT @SoDu = quantity FROM Inventory 
+    WHERE location_id = @LocationID AND sku_id = @SkuID
+    WAITFOR DELAY '00:00:10'
+    IF(@Quantity > @SoDu OR @SoDu IS NULL)
+    BEGIN
+        ROLLBACK TRAN
+        PRINT N'Không đủ tồn kho để xuất!'
+        RETURN
+    END
+    UPDATE Inventory 
+    SET quantity = @SoDu - @Quantity
+    WHERE location_id = @LocationID AND sku_id = @SkuID
+    IF(@@ERROR <> 0) 
+    BEGIN 
+    ROLLBACK TRAN 
+    RETURN 
+    END
+    COMMIT TRANSACTION
+    PRINT N'Xuất kho thành công!'
+END
+Go 
+Chú thích: Chức năng xuất kho sau sửa lỗi
+Giải pháp sử dụng mức cô lập mặc định READ COMMITTED và loại bỏ hoàn toàn WITH NOLOCK trong thủ tục xuất kho nhằm ngăn chặn việc đọc dữ liệu chưa commit. Khi đó, nếu một giao tác đang cập nhật dữ liệu của giao tác T1, các giao tác khác buộc phải chờ đến khi T1 hoàn tất commit hoặc rollback mới được phép đọc, giúp tránh sai lệch dữ liệu tồn kho.
+Bảng 4.17. Giải pháp sử dụng tránh đọc dữ liệu rác
+
+=== TABLE START ===
+Thời điểm | T1 | T2
+t1 | Read(quantity)
+t2 | quantity = 50 + 30
+t3 | Write(quantity)
+t4 | Abort
+t5 | Read(quantity) đọc giá trị cũ (50)
+t6 | quantity = 50 - 60
+t7 | Rollback
+=== TABLE END ===
+
+4.8.3. Không đọc lại được dữ liệu
+Để khắc phục lỗi không đọc lại được dữ liệu, ta thiết lập mức cô lập REPEATABLE READ cho giao tác tìm kiếm. Cơ chế này đảm bảo rằng các dòng dữ liệu đã được đọc bởi T1 sẽ được giữ khóa chia sẻ cho đến khi giao tác hoàn tất, buộc các yêu cầu cập nhật từ T2 phải chờ đợi. Điều này giúp T1 bảo đảm dữ liệu giữa các lần đọc trong cùng một giao tác luôn đồng nhất và chính xác.
+CREATE PROCEDURE USP_SearchSupplier_Fix @SupplierName NVARCHAR(100), 
+@Phone NVARCHAR(50) AS
+BEGIN
+    SET TRANSACTION ISOLATION LEVEL REPEATABLE READ 
+    BEGIN TRANSACTION
+    IF NOT EXISTS (SELECT * FROM Supplier 
+    WHERE supplier_name=@SupplierName AND phone=@Phone)
+    BEGIN
+        PRINT('Không tìm thấy')
+        ROLLBACK TRAN
+        RETURN
+    END
+WAITFOR DELAY '00:00:10
+    SELECT * FROM Supplier WHERE supplier_name=@SupplierName AND phone=@Phone
+    COMMIT TRAN
+END
+GO
+Chú thích: Chức năng tìm kiếm nhà cung cấp
+// Cập nhật thông tin nhà cung cấp
+CREATE PROCEDURE USP_UpdateSupplier
+@SupplierID INT,
+@SupplierName NVARCHAR(100), 
+@Address NVARCHAR(100),
+@Email NVARCHAR(255), 
+@Phone NVARCHAR(50) 
+AS
+BEGIN
+    BEGIN TRAN
+    --- Cập nhật thông tin
+    UPDATE Supplier 
+    SET supplier_name=ISNULL(@SupplierName,supplier_name),
+    address=ISNULL(@Address,address), 
+    email=ISNULL(@Email,email), phone=ISNULL(@Phone,phone)
+    WHERE supplier_id=@SupplierID
+    --- Có lỗi
+    IF(@@ERROR <> 0)
+    BEGIN
+    ROLLBACK TRAN
+    RETURN
+    END
+    COMMIT TRANSACTION
+END
+GO
+Chú thích: Chức năng cập nhật nhà cung cấp
+Bảng 4.18. Giải pháp sử dụng khóa đọc, ghi tránh không đọc lại được dữ liệu
+
+=== TABLE START ===
+Thời điểm | T1 | T2
+t1 | Read_Lock(Supplier)
+t2 | Read(Supplier)
+t3 | Write_lock(Supplier) - BLOCKED
+t4 | Read(Supplier)
+t5 | Unlock(Supplier)
+t6 | Write_Lock(Supplier)
+t7 | Write(Supplier)
+t8 | Unlock(Supplier)
+=== TABLE END ===
+
+4.8.4. Bóng ma
+CREATE PROCEDURE USP_ListProductByCondition_Fix 
+@CategoryID INT 
+AS
+BEGIN
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE 
+    BEGIN TRANSACTION
+    IF NOT EXISTS 
+    (SELECT * FROM Product WHERE category_id=@CategoryID)
+    BEGIN
+        PRINT('Không tìm thấy')
+        ROLLBACK TRAN
+        RETURN
+    END
+    ELSE
+    BEGIN
+        DECLARE @Count INT 
+        SELECT @Count=COUNT(*) FROM Product WHERE category_id=@CategoryID 
+        PRINT CAST(@Count, NVARCHAR) + ' sản phẩm'
+        WAITFOR DELAY '00:00:10' 
+        SELECT * FROM Product WHERE category_id=@CategoryID
+    END
+    COMMIT TRANSACTION
+END
+GO
+Chú thích: Chức năng liệt kê danh sách sản phẩm theo mã danh mục
+-- Thủ tục thêm sản phẩm
+CREATE PROCEDURE USP_InsertProduct
+@ProductName NVARCHAR(100), @Description NVARCHAR(100), @CategoryID INT 
+AS
+BEGIN
+    BEGIN TRANSACTION
+        -- Thêm một dòng sản phẩm vào bảng sản phẩm 
+        INSERT INTO Product
+        (product_name,description,category_id) 
+        VALUES 
+        (@ProductName,@Description,@CategoryID )
+        IF(@@ERROR <> 0)
+        BEGIN
+        Print('Thêm sản phẩm không thành công')
+        ROLLBACK TRAN
+        RETURN
+        END
+    COMMIT TRANSACTION
+END
+GO
+Chú thích: Chức năng thêm sản phẩm
+Đặt mức cô lập của T1 thành SERIALIZABLE sẽ khóa toàn bộ phạm vi dữ liệu mà T1 đọc. Khi đó, nếu T2 cố thêm bản ghi mới vào cùng phạm vi, nó phải chờ hoặc bị chặn đến khi T1 hoàn tất. Nhờ vậy, tránh được hiện tượng bóng ma và đảm bảo dữ liệu luôn nhất quán trong suốt giao tác.
+Bảng 4.19. Giải pháp sử dụng khóa đọc, ghi tránh bóng ma
+
+=== TABLE START ===
+Thời điểm | T1 | T2
+t1 | Read_Lock(Product)
+t2 | Read(Product)
+t3 | Read(Product)
+t4 | Unlock(Product)
+t5 | Write_Lock(Product)
+t6 | Write(Product)
+t7 | Unlock(Product)
+=== TABLE END ===
+
+4.8.5. Deadlock
+Phương thức để tránh khóa chết là thống nhất thứ tự truy cập các bảng trong toàn bộ hệ thống. Vì vậy, cần sửa thủ tục hủy chi tiết xuất kho theo hướng cập nhật bảng Inventory trước, rồi mới xóa dữ liệu ở bảng ExportDetail.
+ALTER PROCEDURE USP_CancelExportDetail @ExportDetailID INT, @SkuID INT, 
+@LocationID INT, @Quantity INT AS
+BEGIN BEGIN TRANSACTION BEGIN TRY
+    UPDATE Inventory SET quantity=quantity+@Quantity
+    WHERE location_id=@LocationID AND sku_id=@SkuID WAITFOR DELAY '00:00:05'
+    DELETE FROM ExportDetail WHERE export_detail_id=@ExportDetailID
+        COMMIT TRANSACTION
+    END TRY BEGIN CATCH
+        ROLLBACK TRANSACTION
+    END CATCH
+END
+GO
+Chú thích: Chức năng hủy chi tiết xuất kho
+Trong thủ tục USP_CancelExportDetail, hệ thống thực hiện cập nhật lại số lượng tồn kho trước , sau đó mới tiến hành xóa dòng chi tiết xuất kho. Toàn bộ quá trình được đặt trong một transaction với cơ chế COMMIT/ROLLBACK để đảm bảo tính nguyên tử. Ngoài ra, việc sử dụng WAITFOR DELAY trong mô phỏng giúp kiểm tra khả năng xảy ra xung đột khi có nhiều giao tác đồng thời. Nhờ giải pháp này, hệ thống đảm bảo dữ liệu luôn nhất quán, tránh khóa chết khi điều khiển tương tranh.
+Bảng 4.20. Giải pháp tránh khóa chết
+
+=== TABLE START ===
+Thời điểm | T1 | T2
+t1 | Lock(Inventory)
+t2 | Update(Inventory)
+t3 | Lock(ExportDetail)
+t4 | Insert(ExportDetail)
+t5 | Commit
+t6 | Unlock(Inventory)
+t7 | Unlock(ExportDetail)
+t8 | Lock(Inventory)
+t9 | Update(Inventory)
+t10 | Lock(ExportDetail)
+t11 | Delete(ExportDetail)
+t12 | Commit
+t13 | Unlock(Inventory)
+t14 | Unlock(ExportDetail)
+=== TABLE END ===
+
+CHƯƠNG 5: THIẾT KẾ GIAO DIỆN VÀ XÂY DỰNG CHƯƠNG TRÌNH
+5.1. Thiết kế giao diện WinForms
+5.1.1. Giao diện đăng nhập
+Hình 5.1. Giao diện đăng nhập
+5.1.2. Giao diện trang chủ
+Hình 5.2. Giao diện trang chủ
+5.1.3. Giao diện trang quản lý danh mục
+Hình 5.3. Giao diện quản lý danh mục
+5.1.4. Giao diện trang quản lý sản phẩm
+Hình 5.4. Giao diện quản lý sản phẩm
+5.1.5. Giao diện trang quản lý biến thể sản phẩm
+Hình 5.5. Giao diện quản lý biến thể sản phẩm
+5.1.6. Giao diện trang quản lý kho hàng
+Hình 5.6. Giao diện quản lý kho hàng
+5.1.7. Giao diện trang quản lý vị trí lưu trữ
+Hình 5.7. Giao diện quản lý lưu trữ
+5.1.8. Giao diện trang quản lý nhà cung cấp
+Hình 5.8. Giao diện quản lý nhà cung cấp
+5.1.9. Giao diện trang quản lý nhập kho 
+Hình 5.9. Giao diện nhập kho
+5.1.10. Giao diện trang quản lý xuất kho
+Hình 5.10. Giao diện xuất kho
+5.1.11. Giao diện trang quản lý tồn kho
+Hình 5.11. Giao diện quản lý tồn kho
+5.2. Xây dựng cấu trúc thư mục
+Bảng 5.1. Tổng quan cấu trúc thư mục dự án
+
+=== TABLE START ===
+Thư mục | Mô tả
+QuanLyKho/ | Thư mục chính của hệ thống
+├── FormHomePage.cs | Cài đặt trang chủ
+├── FormHomePage.Designer.cs | Giao diện trang chủ
+├── FormAdmin.cs | Cài đặt trang quản trị viên
+├── FormAdmin.Designer.cs | Giao diện trang quản trị viên
+├── DAL/ | Thư mục chứa các lớp truy cập dữ liệu
+│   ├── DataProvider.cs | Lớp kết nối cơ sở dữ liệu
+│   ├── AccountDAL.cs | Lớp xử lý tài khoản
+│   ├── StorageLocationDAL.cs | Lớp xử lý vị trí kho hàng
+│   └── InventoryDAL.cs | Lớp xử lý tồn kho
+└── DTO/ | Thư mục chứa các lớp chuyển đổi dữ liệu
+├── Inventory.cs | Đối tượng tồn kho
+├── StorageLocation.cs | Đối tượng vị trí lưu trữ
+└── SKU.cs | Đối tượng biến thể sản phẩm
+=== TABLE END ===
+
+5.3. Lớp giao diện người dùng
+5.3.1. Lớp giao diện người dùng
+Thực hiện tương tác với người dùng thông qua các form như đăng nhập, quản lý sản phẩm, nhập kho, xuất kho, xem tồn kho, lưu trữ. Hiển thị dữ liệu và gửi yêu cầu xuống các lớp bên dưới.
+Bảng 5.2. Mô tả lớp GUI
+
+=== TABLE START ===
+Thư mục | Thành phần | Mô tả
+GUI | FormLogin.cs | Giao diện đăng nhập, xác thực người dùng
+GUI | FormHomePage.cs | Trang dashboard hiển thị tổng quan tồn kho
+GUI | FormAdmin.cs | Trang quản trị chính, xử lý toàn bộ chức năng hệ thống
+=== TABLE END ===
+
+5.3.2. Lớp Data Transfer Object
+Đóng vai trò là đối tượng trung gian, dùng để ánh xạ dữ liệu từ database thành đối tượng và ngược lại. Giúp truyền dữ liệu giữa lớp giao diện người dùng và lớp truy cập dữ liệu một cách rõ ràng, tránh phụ thuộc trực tiếp vào cơ sở dữ liệu.
+Bảng 5.3. Mô tả lớp DTO
+
+=== TABLE START ===
+Thư mục | Thành phần | Mô tả
+DTO | Category.cs | Danh mục sản phẩm
+DTO | Warehouse.cs | Thông tin kho
+DTO | Supplier.cs | Nhà cung cấp
+DTO | Product.cs | Sản phẩm
+DTO | SKU.cs | Biến thể sản phẩm
+DTO | StorageLocation.cs | Vị trí lưu trữ
+DTO | ImportReceipt.cs | Phiếu nhập
+DTO | ExportReceipt.cs | Phiếu xuất
+DTO | Inventory.cs | Dữ liệu tồn kho
+=== TABLE END ===
+
+Chú thích: DTO~Data Transfer Object;
+5.3.3. Lớp truy cập dữ liệu
+Chịu trách nhiệm kết nối với SQL Server, thực thi các câu lệnh SQL, stored procedure, truy vấn dữ liệu và trả kết quả về cho DTO.
+Bảng 5.4. Mô tả lớp DAL
+
+=== TABLE START ===
+Thư mục | Thành phần | Mô tả
+DAL | DataProvider.cs | Quản lý kết nối và thực thi truy vấn
+DAL | AccountDAL.cs | Xử lý đăng nhập
+DAL | CategoryDAL.cs | CRUD danh mục
+DAL | WarehouseDAL.cs | Quản lý kho
+DAL | SupplierDAL.cs | Quản lý nhà cung cấp
+DAL | ProductDAL.cs | Quản lý sản phẩm
+DAL | SkuDAL.cs | Quản lý SKU
+DAL | StorageLocationDAL.cs | Quản lý vị trí lưu trữ
+DAL | ReceiptDAL.cs | Xử lý nhập/xuất kho
+DAL | InventoryDAL.cs | Truy vấn tồn kho
+=== TABLE END ===
+
+Chú thích: DAL~Data Access Layer;
+CHƯƠNG 6: KẾT LUẬN
+6.1. Kết quả đạt được
+Quá trình phân tích và thiết kế đã xác định được các thực thể quan trọng trong hệ thống như danh mục hàng hóa, sản phẩm, biến thể sản phẩm, kho hàng, vị trí lưu trữ, nhà cung cấp, phiếu nhập, phiếu xuất và tồn kho. Các mối quan hệ giữa các thực thể được xây dựng hợp lý, phản ánh đúng nghiệp vụ thực tế của bài toán quản lý kho, đồng thời đảm bảo các ràng buộc toàn vẹn dữ liệu trong cơ sở dữ liệu. 
+Hệ thống đã triển khai đầy đủ các chức năng chính bao gồm quản lý danh mục, sản phẩm, nhập kho, xuất kho, theo dõi tồn kho và quản lý nhà cung cấp. Bên cạnh đó, việc sử dụng các đối tượng trong SQL Server như View, Function, Stored Procedure và Trigger đã góp phần xử lý nghiệp vụ hiệu quả, tự động hóa quá trình cập nhật dữ liệu và kiểm soát các ràng buộc trong hệ thống. Đồng thời, đồ án cũng đã nghiên cứu và mô phỏng các vấn đề trong điều khiển tương tranh như mất dữ liệu cập nhật, đọc dữ liệu rác, không đọc lại được dữ liệu, bóng ma và khóa chết, từ đó đưa ra các giải pháp phù hợp nhằm đảm bảo tính nhất quán và toàn vẹn của dữ liệu trong môi trường nhiều người dùng. 
+6.2. Hạn chế còn tồn tại
+Mặc dù hệ thống đã đạt được các mục tiêu đề ra, vẫn còn tồn tại một số hạn chế nhất định. Giao diện người dùng còn đơn giản và chưa được tối ưu về mặt trải nghiệm, chưa đáp ứng tốt các tiêu chí về thẩm mỹ và tính tiện dụng. 
+Hệ thống hiện tại chỉ được xây dựng trên nền tảng desktop nên khả năng truy cập còn hạn chế, chưa hỗ trợ sử dụng trên nền tảng web hoặc thiết bị di động. Ngoài ra, hệ thống chưa triển khai cơ chế phân quyền người dùng một cách chi tiết và chưa tối ưu hiệu năng khi xử lý dữ liệu lớn hoặc trong môi trường có nhiều người dùng đồng thời. Một số logic nghiệp vụ vẫn còn phụ thuộc nhiều vào cơ sở dữ liệu thông qua thủ tục và bẫy lỗi, làm giảm tính linh hoạt trong việc mở rộng hệ thống. Kết quả đạt được là một hệ thống đáp ứng được các yêu cầu nghiệp vụ chính với các mô hình kinh doanh nhỏ và vừa.
+6.3. Hướng phát triển
+Trong tương lai, hệ thống có thể được tiếp tục phát triển theo hướng hoàn thiện và mở rộng các nghiệp vụ quản lý kho nhằm đáp ứng tốt hơn nhu cầu thực tế của doanh nghiệp. Trước hết, hệ thống có thể bổ sung quy trình quản lý nhập, xuất kho chặt chẽ hơn, bao gồm kiểm soát theo lô hàng, hạn sử dụng và nguồn gốc sản phẩm, từ đó hỗ trợ truy vết hàng hóa khi cần thiết. Ngoài ra, việc áp dụng cơ chế quản lý tồn kho theo thời gian thực sẽ giúp người quản lý nắm bắt chính xác số lượng hàng hóa tại từng thời điểm, hạn chế tình trạng thiếu hụt hoặc tồn kho dư thừa.
+Bên cạnh đó, hệ thống có thể được mở rộng để hỗ trợ tối ưu hóa việc sắp xếp hàng hóa trong kho, như đề xuất vị trí lưu trữ phù hợp dựa trên tần suất xuất nhập hoặc đặc tính của sản phẩm. Việc tích hợp các chức năng như cảnh báo tồn kho tối thiểu, tự động đề xuất nhập hàng và lập kế hoạch cung ứng cũng sẽ giúp nâng cao hiệu quả quản lý và giảm thiểu rủi ro trong vận hành.
+Ngoài ra, hệ thống có thể phát triển thêm các chức năng báo cáo và phân tích dữ liệu chuyên sâu, cho phép đánh giá hiệu suất hoạt động của kho, xu hướng tiêu thụ sản phẩm và hiệu quả của nhà cung cấp. Từ đó, hỗ trợ nhà quản lý đưa ra các quyết định chính xác và kịp thời trong hoạt động kinh doanh.
+Cuối cùng, việc kết hợp các công nghệ như mã vạch , QR code hoặc RFID trong quá trình nhập, xuất và kiểm kê hàng hóa sẽ giúp tự động hóa quy trình, giảm thiểu sai sót do con người và nâng cao độ chính xác của dữ liệu trong hệ thống.
+
+=== TABLE START ===
+[1] | L. H. Khôi, “Hệ quản trị cơ sở dữ liệu là gì? Tìm hiểu DBMS cho nhà quản trị,” BASE.VN, 18 June 2025. [Trực tuyến]. Available: https://base.vn/blog/he-quan-tri-co-so-du-lieu/. [Đã truy cập 1 April 2026].
+[2] | B. T. N. Ý, “Mẫu phiếu xuất kho, phiếu nhập kho từ ngày 01/01/2026 theo Thông tư 99/2025/TT-BTC và hướng dẫn cách ghi,” Thư viện pháp luật, 03 November 2025. [Trực tuyến]. Available: https://thuvienphapluat.vn/banan/tin-tuc/mau-phieu-xuat-kho-phieu-nhap-kho-tu-ngay-01012026-theo-thong-tu-992025ttbtc-va-huong-dan-cach-ghi-18906. [Đã truy cập 27 March 2026].
+[3] | T. Nhi, “Tải mẫu thẻ kho mới nhất 2026 theo Thông tư 99/2025/TT-BTC,” Thư viện pháp luật, 12 December 2026. [Trực tuyến]. Available: https://thuvienphapluat.vn/phap-luat-doanh-nghiep/bai-viet/tai-mau-the-kho-moi-nhat-2026-theo-thong-tu-99-2025-tt-btc-16990.html. [Đã truy cập 27 March 2026].
+=== TABLE END ===

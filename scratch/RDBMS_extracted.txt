@@ -1,0 +1,77 @@
+ MỤC LỤC CHI TIẾT ĐỒ ÁN: XÂY DỰNG HỆ THỐNG QUẢN LÝ ĐẶT VÉ XEM PHIM
+TÓM TẮT ĐỒ ÁN
+ DANH MỤC CÁC TỪ VIẾT TẮT
+ DANH MỤC BẢNG BIỂU
+ DANH MỤC HÌNH ẢNH
+ MỨC ĐỘ ĐÓNG GÓP CỦA THÀNH VIÊN TRONG NHÓM
+CHƯƠNG 1: TỔNG QUAN HỆ THỐNG
+ 1.1. Lý do chọn đề tài
+1.1.1. Bối cảnh và thực trạng (Tình trạng quá tải tại quầy vé, rủi ro trùng ghế)
+1.1.2. Nhu cầu giải pháp phần mềm tại rạp chiếu phim
+1.1.3. Phạm vi triển khai (Giới hạn ở module bán vé tại quầy và quản lý lịch chiếu)
+ 1.2. Cơ sở lý thuyết
+1.2.1. Khái niệm và chức năng của hệ quản trị cơ sở dữ liệu (Đặc biệt nhấn mạnh tính ACID và Transaction)
+ 1.3. Công nghệ và môi trường phát triển (C# WinForms, SQL Server, T-SQL)
+ 1.4. Tổng quan về mô hình 3 lớp (Presentation, DAL, DTO)
+ 1.5. Mục tiêu hệ thống (Áp dụng kỹ thuật điều khiển tương tranh vào bài toán bán vé)
+CHƯƠNG 2: PHÂN TÍCH THIẾT KẾ HỆ THỐNG
+ 2.1. Khảo sát nghiệp vụ
+2.1.1. Mô hình hoạt động tại rạp chiếu phim (Lên lịch chiếu -> Bán vé -> Soát vé)
+2.1.2. Các biểu mẫu nghiệp vụ đang sử dụng (Sơ đồ ghế ngồi, Mẫu vé xem phim, Báo cáo doanh thu)
+2.1.3. Những khó khăn trong quản lý vé thủ công (Rủi ro "Double-booking")
+ 2.2. Yêu cầu hệ thống
+2.2.1. Yêu cầu chức năng (Quản lý Phim, Phòng chiếu, Suất chiếu, Đặt vé)
+2.2.2. Yêu cầu phi chức năng (Thời gian phản hồi nhanh, bảo toàn dữ liệu)
+ 2.3. Phân tích các chức năng chính của hệ thống
+CHƯƠNG 3: PHÂN TÍCH VÀ THIẾT KẾ CƠ SỞ DỮ LIỆU
+ 3.1. Phân tích dữ liệu hệ thống
+3.1.1. Các thực thể trong hệ thống (Movie, Room, Seat, Showtime, Ticket, Staff, User/Account)
+3.1.2. Quan hệ giữa các thực thể
+ 3.2. Các ràng buộc dữ liệu
+3.2.1. Toàn vẹn miền giá trị (Giá vé > 0, Ghế thuộc phạm vi phòng)
+3.2.2. Ràng buộc nghiệp vụ (Một ghế trong một suất chiếu chỉ bán được 1 lần)
+ 3.3. Sơ đồ thực thể quan hệ (ERD)
+ 3.4. Thiết kế cơ sở dữ liệu
+3.4.1. Cấu trúc chi tiết từng bảng
+CHƯƠNG 4: CÀI ĐẶT CƠ SỞ DỮ LIỆU VÀ XÁC ĐỊNH TÌNH HUỐNG TRANH CHẤP
+ 4.1. Tạo Database
+ 4.2. Cài đặt các bảng
+4.2.1 - 4.2.8. Tạo các bảng: Category, Movie, Room, Seat, Showtime, Customer, Ticket, TicketDetail...
+ 4.3. Xây dựng các View
+4.3.1. Khung nhìn hiển thị sơ đồ ghế theo suất chiếu (Trống/Đã bán)
+4.3.2. Khung nhìn hiển thị doanh thu theo phim
+ 4.4. Xây dựng các Function
+4.4.1. Hàm tính tổng tiền vé của một hóa đơn
+4.4.2. Hàm đếm số ghế trống của một suất chiếu
+ 4.5. Xây dựng các Stored Procedure
+4.5.1 - 4.5.11. Các thủ tục Thêm/Sửa/Xóa/Tìm kiếm Phim, Suất chiếu, Đặt vé, Hủy vé...
+ 4.6. Xây dựng các Trigger
+4.6.1. Bẫy lỗi bán trùng ghế (Ngăn chặn Insert nếu ghế đã được mua)
+4.6.2. Bẫy lỗi trùng lịch chiếu (Kiểm tra thời gian suất chiếu mới có đè lên suất cũ không)
+ 4.7. Xác định tình huống tranh chấp
+ (Phải cố tình tạo lỗi và vẽ sơ đồ tuần tự thể hiện lỗi xảy ra như thế nào)
+4.7.1. Cài đặt mất dữ liệu cập nhật (Lost Update): 2 nhân viên cùng bán 1 ghế.
+4.7.2. Cài đặt đọc dữ liệu rác (Dirty Read): Đọc trạng thái ghế khi khách đang thanh toán nhưng sau đó hủy.
+4.7.3. Cài đặt không đọc lại được dữ liệu (Non-repeatable Read): Tính doanh thu ngày nhưng có vé bị hủy giữa chừng.
+4.7.4. Cài đặt bóng ma (Phantom): Khách tra cứu danh sách phim thì quản lý thêm suất chiếu mới.
+4.7.5. Cài đặt khóa chết (Deadlock): 2 nhân viên mua combo ghế (A1, A2) nhưng theo thứ tự ngược nhau.
+ 4.8. Xử lí tình huống tranh chấp
+ (Áp dụng lý thuyết Điều khiển tương tranh để sửa các lỗi ở mục 4.7)
+4.8.1. Mất dữ liệu cập nhật: Sử dụng khóa UPDLOCK, HOLDLOCK trong SP bán vé.
+4.8.2. Đọc dữ liệu rác: Sử dụng mức cô lập READ COMMITTED.
+4.8.3. Không đọc lại được dữ liệu: Sử dụng mức cô lập REPEATABLE READ.
+4.8.4. Bóng ma: Sử dụng mức cô lập SERIALIZABLE.
+4.8.5. Deadlock: Sắp xếp thống nhất thứ tự truy cập tài nguyên (Luôn khóa ghế ID nhỏ trước).
+CHƯƠNG 5: THIẾT KẾ GIAO DIỆN VÀ XÂY DỰNG CHƯƠNG TRÌNH
+ 5.1. Thiết kế giao diện WinForms
+5.1.1 - 5.1.11. Form Đăng nhập, Form Dashboard, Form Quản lý Phim/Lịch chiếu, Form Sơ đồ ghế (UI cốt lõi), Form Bán vé...
+ 5.2. Xây dựng cấu trúc thư mục
+ 5.3. Lớp giao diện người dùng
+5.3.1. Lớp GUI
+5.3.2. Lớp Data Transfer Object (DTO)
+5.3.3. Lớp truy cập dữ liệu (DAL)
+CHƯƠNG 6: KẾT LUẬN
+ 6.1. Kết quả đạt được (Giải quyết thành công vấn đề bán trùng ghế nhờ Transaction và Locking)
+ 6.2. Hạn chế còn tồn tại (Chỉ chạy mạng LAN, chưa tích hợp Momo/VNPay)
+ 6.3. Hướng phát triển (Chuyển đổi lên Web/App di động)
+TÀI LIỆU THAM KHẢO
