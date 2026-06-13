@@ -3,8 +3,7 @@ import { ArrowLeft, Monitor, ChevronRight, Minus, Plus, CheckCircle2, ShieldAler
 import type { Movie, Showtime } from "../data/movies";
 import { cinemas, TICKET_PRICES } from "../data/movies";
 import { 
-  loadSeatLocks, loadTickets, isSeatLocked, addSeatLock, removeSeatLock, 
-  clearSeatLocksForTransaction 
+  loadSeatLocks, loadTickets, isSeatLocked, addSeatLock, removeSeatLock
 } from "../lib/db";
 
 interface SeatsPageProps {

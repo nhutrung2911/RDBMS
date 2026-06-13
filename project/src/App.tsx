@@ -29,7 +29,7 @@ export default function App() {
   const [bookedCombos, setBookedCombos] = useState<{ name: string; quantity: number; price: number }[]>([]);
   const [bookingTotal, setBookingTotal] = useState(0);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<"customer" | "staff" | "admin" | null>(null);
+  const [userRole, setUserRole] = useState<"customer" | "admin" | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Concurrency Simulation States
@@ -203,7 +203,7 @@ export default function App() {
                   setUserEmail(email);
                   
                   // Redirect according to roles
-                  if (role === "admin" || role === "staff") {
+                  if (role === "admin") {
                     navigate("admin");
                   } else {
                     navigate("home");

@@ -574,17 +574,7 @@ export default function AuthPage({ initialMode = "login", onSuccess, onBack }: A
                   <span>Khách hàng: <strong>customer@gmail.com</strong></span>
                   <span className="text-gray-500">pass: password123</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail("staff@gmail.com");
-                    setPassword("password123");
-                  }}
-                  className="bg-zinc-950 p-2 rounded-lg border border-zinc-850 hover:border-zinc-700 transition-colors flex justify-between w-full text-left cursor-pointer"
-                >
-                  <span>Nhân viên: <strong>staff@gmail.com</strong></span>
-                  <span className="text-gray-500">pass: password123</span>
-                </button>
+
                 <button
                   type="button"
                   onClick={() => {

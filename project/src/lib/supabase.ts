@@ -59,16 +59,6 @@ function createMockSupabase() {
         }
       },
       {
-        id: 'user-staff',
-        email: 'staff@gmail.com',
-        password: 'password123',
-        fullName: 'Trần Nhân Viên',
-        user_metadata: {
-          full_name: 'Trần Nhân Viên',
-          role: 'staff'
-        }
-      },
-      {
         id: 'user-admin',
         email: 'admin@gmail.com',
         password: 'password123',

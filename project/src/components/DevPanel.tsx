@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Terminal, Settings, AlertTriangle, Play, RotateCcw, X, Cpu, Info, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Play, RotateCcw, X, Cpu, Info, ShieldAlert } from "lucide-react";
 
 export interface ConcurrencyConfig {
   devModeEnabled: boolean;

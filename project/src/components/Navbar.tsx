@@ -5,7 +5,7 @@ interface NavbarProps {
   onNavigate: (page: string, data?: unknown) => void;
   currentPage: string;
   userEmail?: string | null;
-  userRole?: "customer" | "staff" | "admin" | null;
+  userRole?: "customer" | "admin" | null;
   onAuthClick?: () => void;
   onSearch?: (query: string) => void;
 }
@@ -15,7 +15,7 @@ export default function Navbar({ onNavigate, currentPage, userEmail, userRole, o
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const showAdminLink = userRole === "admin" || userRole === "staff";
+  const showAdminLink = userRole === "admin";
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-sm border-b border-white/5">

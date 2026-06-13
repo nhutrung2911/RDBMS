@@ -12,7 +12,7 @@ import {
 } from "../lib/db";
 
 interface AdminPortalPageProps {
-  userRole: "customer" | "staff" | "admin" | null;
+  userRole: "customer" | "admin" | null;
   onBack: () => void;
   concurrencyConfig?: any;
   addSqlLog?: (message: string, type?: 'info' | 'query' | 'lock' | 'success' | 'error') => void;
@@ -21,11 +21,9 @@ interface AdminPortalPageProps {
 type Tab = "dashboard" | "movies" | "showtimes" | "tickets" | "sales";
 
 export default function AdminPortalPage({ 
-  userRole, onBack, concurrencyConfig, addSqlLog 
+  userRole: _userRole, onBack, concurrencyConfig, addSqlLog 
 }: AdminPortalPageProps) {
-  // If role is staff, restrict tab to tickets
-  const isStaff = userRole === "staff";
-  const [activeTab, setActiveTab] = useState<Tab>(isStaff ? "tickets" : "dashboard");
+  const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [moviesList, setMoviesList] = useState<Movie[]>([]);
   const [showtimesList, setShowtimesList] = useState<Showtime[]>([]);
   const [ticketsList, setTicketsList] = useState<BookedTicket[]>([]);
@@ -314,10 +312,7 @@ export default function AdminPortalPage({
     setTicketsList(loadTickets());
   }, []);
 
-  // Update tab if role changes
-  useEffect(() => {
-    setActiveTab(userRole === "staff" ? "tickets" : "dashboard");
-  }, [userRole]);
+
 
   const refreshDB = () => {
     setMoviesList(loadMovies());
@@ -522,12 +517,11 @@ export default function AdminPortalPage({
     document.body.removeChild(link);
   };
 
-  // Filter sidebar navigation items by role
   const sidebarItems = [
-    ...(!isStaff ? [{ id: "dashboard", label: "Bảng Điều Khiển", icon: LayoutDashboard }] : []),
-    ...(!isStaff ? [{ id: "movies", label: "Quản Lý Phim", icon: Film }] : []),
-    ...(!isStaff ? [{ id: "showtimes", label: "Quản Lý Suất Chiếu", icon: Calendar }] : []),
-    { id: "tickets", label: isStaff ? "Soát Vé QR" : "Soát Vé & Giao Dịch", icon: QrCode },
+    { id: "dashboard", label: "Bảng Điều Khiển", icon: LayoutDashboard },
+    { id: "movies", label: "Quản Lý Phim", icon: Film },
+    { id: "showtimes", label: "Quản Lý Suất Chiếu", icon: Calendar },
+    { id: "tickets", label: "Soát Vé & Giao Dịch", icon: QrCode },
     { id: "sales", label: "Bán Vé Tại Quầy", icon: Ticket },
   ];
 
@@ -540,11 +534,11 @@ export default function AdminPortalPage({
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sticky top-24">
             <div className="flex items-center gap-3 mb-6 pb-6 border-b border-zinc-800">
               <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center font-bold text-white shadow-lg shadow-red-600/20">
-                {isStaff ? "S" : "A"}
+                A
               </div>
               <div>
-                <h3 className="text-white font-bold">{isStaff ? "Portal Nhân Viên" : "Portal Quản Trị"}</h3>
-                <p className="text-gray-500 text-xs font-medium">Quyền: {isStaff ? "Staff / Nhân Viên" : "Admin / Quản Trị"}</p>
+                <h3 className="text-white font-bold">Portal Quản Trị</h3>
+                <p className="text-gray-500 text-xs font-medium">Quyền: Admin / Quản Trị</p>
               </div>
             </div>
 
@@ -582,7 +576,7 @@ export default function AdminPortalPage({
         <main className="flex-1 min-w-0">
           
           {/* DASHBOARD TAB */}
-          {!isStaff && activeTab === "dashboard" && (
+          {activeTab === "dashboard" && (
             <div className="space-y-6">
               <h1 className="text-2xl font-bold text-white">Báo Cáo & Thống Kê</h1>
               
@@ -935,7 +929,7 @@ export default function AdminPortalPage({
           )}
 
           {/* MOVIES TAB */}
-          {!isStaff && activeTab === "movies" && (
+          {activeTab === "movies" && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-white">Quản Lý Phim</h1>
@@ -1008,7 +1002,7 @@ export default function AdminPortalPage({
           )}
 
           {/* SHOWTIMES TAB */}
-          {!isStaff && activeTab === "showtimes" && (
+          {activeTab === "showtimes" && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-white">Quản Lý Suất Chiếu</h1>
@@ -1085,7 +1079,7 @@ export default function AdminPortalPage({
           {/* TICKET SCANNER & STAFF VIEW */}
           {activeTab === "tickets" && (
             <div className="space-y-6">
-              <h1 className="text-2xl font-bold text-white">{isStaff ? "Bán & Soát Vé QR" : "Soát Vé & Giao Dịch"}</h1>
+              <h1 className="text-2xl font-bold text-white">Soát Vé & Giao Dịch</h1>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
@@ -1178,7 +1172,7 @@ export default function AdminPortalPage({
 
                 {/* Transactions list (Right) */}
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4 flex flex-col min-h-[400px]">
-                  <h3 className="text-white font-bold text-lg">{isStaff ? "Vé Đã Bán Gần Đây" : "Danh Sách Vé Mới Đặt"}</h3>
+                  <h3 className="text-white font-bold text-lg">Danh Sách Vé Mới Đặt</h3>
                   <div className="flex-1 overflow-y-auto space-y-3 max-h-[350px]">
                     {ticketsList.length > 0 ? (
                       ticketsList.map((t, idx) => (
@@ -1648,7 +1642,7 @@ export default function AdminPortalPage({
       </div>
 
       {/* ADD/EDIT MOVIE MODAL */}
-      {showMovieModal && !isStaff && (
+      {showMovieModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-6">
             <div className="flex justify-between items-center pb-4 border-b border-zinc-800">
@@ -1780,7 +1774,7 @@ export default function AdminPortalPage({
       )}
 
       {/* CREATE SHOWTIME MODAL */}
-      {showShowtimeModal && !isStaff && (
+      {showShowtimeModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-6">
             <div className="flex justify-between items-center pb-4 border-b border-zinc-800">
@@ -1957,7 +1951,7 @@ export default function AdminPortalPage({
                 </div>
                 <div className="flex justify-between text-[9px] text-zinc-500">
                   <span>Nhân viên / Staff:</span>
-                  <span>{userRole === "staff" ? "staff@gmail.com" : "nguyennhutrung788@gmail.com"}</span>
+                  <span>nguyennhutrung788@gmail.com</span>
                 </div>
               </div>
 
