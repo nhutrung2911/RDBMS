@@ -20,12 +20,62 @@ export interface BookedTicket {
 }
 
 export function initializeDB() {
+  const getLocalDateString = (offsetDays = 0) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const day0 = getLocalDateString(0); // Today
+
   if (!localStorage.getItem("movies_db")) {
     localStorage.setItem("movies_db", JSON.stringify(staticMovies));
+  } else {
+    // Sync movie release dates for cached database
+    try {
+      const storedMovies = JSON.parse(localStorage.getItem("movies_db") || "[]");
+      const updatedMovies = storedMovies.map((m: any) => {
+        const staticMovie = staticMovies.find((sm) => sm.id === m.id);
+        if (staticMovie) {
+          return { ...m, releaseDate: staticMovie.releaseDate };
+        }
+        return m;
+      });
+      localStorage.setItem("movies_db", JSON.stringify(updatedMovies));
+    } catch (e) {
+      localStorage.setItem("movies_db", JSON.stringify(staticMovies));
+    }
   }
-  if (!localStorage.getItem("showtimes_db")) {
-    localStorage.setItem("showtimes_db", JSON.stringify(staticShowtimes));
+
+  // Always sync showtime dates with dynamic dates (day0, day1, day2)
+  let showtimes = staticShowtimes;
+  const storedShowtimesStr = localStorage.getItem("showtimes_db");
+  if (storedShowtimesStr) {
+    try {
+      const parsed = JSON.parse(storedShowtimesStr);
+      showtimes = parsed.map((s: any) => {
+        const staticSt = staticShowtimes.find((st) => st.id === s.id);
+        if (staticSt) {
+          return {
+            ...s,
+            date: staticSt.date
+          };
+        } else {
+          return {
+            ...s,
+            date: s.date && s.date.includes("-") ? s.date : day0
+          };
+        }
+      });
+    } catch {
+      showtimes = staticShowtimes;
+    }
   }
+  localStorage.setItem("showtimes_db", JSON.stringify(showtimes));
+
   if (!localStorage.getItem("tickets_db")) {
     localStorage.setItem("tickets_db", JSON.stringify([]));
   }

@@ -12,9 +12,28 @@ interface MovieDetailPageProps {
   scrollToShowtimes?: boolean;
 }
 
-const SHOW_DATES = ["01/06", "02/06", "03/06", "04/06", "05/06", "06/06", "07/06"];
-const DATE_VALUES = ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04", "2026-06-05", "2026-06-06", "2026-06-07"];
-const DAY_NAMES = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+const getNext7Days = () => {
+  const values: string[] = [];
+  const labels: string[] = [];
+  const days = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  const dayNames: string[] = [];
+
+  const d = new Date();
+  for (let i = 0; i < 7; i++) {
+    const nextDate = new Date(d);
+    nextDate.setDate(d.getDate() + i);
+    const year = nextDate.getFullYear();
+    const month = String(nextDate.getMonth() + 1).padStart(2, '0');
+    const day = String(nextDate.getDate()).padStart(2, '0');
+    
+    values.push(`${year}-${month}-${day}`);
+    labels.push(`${day}/${month}`);
+    dayNames.push(days[nextDate.getDay()]);
+  }
+  return { values, labels, dayNames };
+};
+
+const { values: DATE_VALUES, labels: SHOW_DATES, dayNames: DAY_NAMES } = getNext7Days();
 
 const TYPE_LABELS: Record<string, string> = {
   standard: "Standard",
@@ -207,7 +226,7 @@ export default function MovieDetailPage({ movie, onBack, onSelectShowtime, scrol
                       : "bg-zinc-900 text-gray-400 border-zinc-800 hover:border-zinc-600 hover:text-white"
                     }`}
                 >
-                  <span className="text-xs mb-0.5 opacity-70">{DAY_NAMES[(i + 0) % 7]}</span>
+                  <span className="text-xs mb-0.5 opacity-70">{DAY_NAMES[i]}</span>
                   <span className="font-bold">{date}</span>
                 </button>
               ))}

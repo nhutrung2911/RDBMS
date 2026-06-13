@@ -36,6 +36,19 @@ export interface Showtime {
   totalSeats: number;
 }
 
+const getLocalDateString = (offsetDays = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const day0 = getLocalDateString(0); // Today
+const day1 = getLocalDateString(1); // Tomorrow
+const day2 = getLocalDateString(2); // Day after
+
 export const movies: Movie[] = [
   {
     id: 1,
@@ -48,7 +61,7 @@ export const movies: Movie[] = [
     poster: "https://images.pexels.com/photos/7991486/pexels-photo-7991486.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&dpr=1",
     backdrop: "https://images.pexels.com/photos/7991486/pexels-photo-7991486.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
     status: "now_showing",
-    releaseDate: "2024-03-01",
+    releaseDate: getLocalDateString(-10),
     description: "Paul Atreides hợp nhất với người Fremen trong khi theo đuổi con đường trả thù chống lại những kẻ đã phá hủy gia đình anh. Đứng trước sự lựa chọn giữa tình yêu cuộc đời mình và số phận của vũ trụ, anh phải ngăn chặn một tương lai khủng khiếp chỉ có anh mới có thể thấy trước.",
     director: "Denis Villeneuve",
     cast: ["Timothée Chalamet", "Zendaya", "Rebecca Ferguson", "Austin Butler"],
@@ -65,7 +78,7 @@ export const movies: Movie[] = [
     poster: "https://images.pexels.com/photos/3945317/pexels-photo-3945317.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&dpr=1",
     backdrop: "https://images.pexels.com/photos/3945317/pexels-photo-3945317.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
     status: "now_showing",
-    releaseDate: "2024-03-29",
+    releaseDate: getLocalDateString(-5),
     description: "Kong và đồng minh mới của mình Godzilla phải liên minh trong một cuộc chiến tàn khốc chống lại một thế lực cổ xưa khổng lồ tiềm ẩn bên trong thế giới của chúng ta.",
     director: "Adam Wingard",
     cast: ["Rebecca Hall", "Brian Tyree Henry", "Dan Stevens", "Kaylee Hottle"],
@@ -82,7 +95,7 @@ export const movies: Movie[] = [
     poster: "https://images.pexels.com/photos/7234213/pexels-photo-7234213.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&dpr=1",
     backdrop: "https://images.pexels.com/photos/7234213/pexels-photo-7234213.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
     status: "now_showing",
-    releaseDate: "2024-03-08",
+    releaseDate: getLocalDateString(-8),
     description: "Chiến binh Rồng Po cần phải đào tạo một chiến binh Rồng mới. Trên con đường này, anh gặp một cáo tên là Zhen, người anh phải đối đầu với một phù thủy mạnh mẽ.",
     director: "Mike Mitchell",
     cast: ["Jack Black", "Awkwafina", "Bryan Cranston", "Viola Davis"],
@@ -99,7 +112,7 @@ export const movies: Movie[] = [
     poster: "https://images.pexels.com/photos/2873486/pexels-photo-2873486.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&dpr=1",
     backdrop: "https://images.pexels.com/photos/2873486/pexels-photo-2873486.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
     status: "now_showing",
-    releaseDate: "2024-04-12",
+    releaseDate: getLocalDateString(-3),
     description: "Trong một tương lai gần, một nhóm phóng viên chiến trường di chuyển qua nước Mỹ đang bị nội chiến tàn phá để đưa tin trong khi đất nước sụp đổ.",
     director: "Alex Garland",
     cast: ["Kirsten Dunst", "Wagner Moura", "Cailee Spaeny", "Stephen McKinley Henderson"],
@@ -116,7 +129,7 @@ export const movies: Movie[] = [
     poster: "https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&dpr=1",
     backdrop: "https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
     status: "now_showing",
-    releaseDate: "2024-05-03",
+    releaseDate: getLocalDateString(-1),
     description: "Một người đóng thế chiến trường bị trật bánh trở lại làm việc khi ngôi sao điện ảnh đang làm phim biến mất. Anh phải truy tìm trong khi cố gắng gây ấn tượng với đạo diễn là tình cũ của mình.",
     director: "David Leitch",
     cast: ["Ryan Gosling", "Emily Blunt", "Aaron Taylor-Johnson", "Hannah Waddingham"],
@@ -133,7 +146,7 @@ export const movies: Movie[] = [
     poster: "https://images.pexels.com/photos/3662845/pexels-photo-3662845.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&dpr=1",
     backdrop: "https://images.pexels.com/photos/3662845/pexels-photo-3662845.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
     status: "coming_soon",
-    releaseDate: "2024-06-14",
+    releaseDate: getLocalDateString(3),
     description: "Riley trải qua những cảm xúc mới khi cô bước vào tuổi teen và gặp phải những cảm xúc hoàn toàn mới xuất hiện trong đầu cô.",
     director: "Kelsey Mann",
     cast: ["Amy Poehler", "Maya Hawke", "Kensington Tallman", "Liza Lapira"],
@@ -150,7 +163,7 @@ export const movies: Movie[] = [
     poster: "https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&dpr=1",
     backdrop: "https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
     status: "coming_soon",
-    releaseDate: "2024-07-26",
+    releaseDate: getLocalDateString(14),
     description: "Deadpool và Wolverine cùng nhau trong một cuộc phiêu lưu xuyên đa vũ trụ, nơi họ phải chiến đấu chống lại những mối đe dọa mới.",
     director: "Shawn Levy",
     cast: ["Ryan Reynolds", "Hugh Jackman", "Emma Corrin", "Matthew Macfadyen"],
@@ -167,7 +180,7 @@ export const movies: Movie[] = [
     poster: "https://images.pexels.com/photos/8108086/pexels-photo-8108086.jpeg?auto=compress&cs=tinysrgb&w=400&h=600&dpr=1",
     backdrop: "https://images.pexels.com/photos/8108086/pexels-photo-8108086.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
     status: "coming_soon",
-    releaseDate: "2024-08-16",
+    releaseDate: getLocalDateString(30),
     description: "Một nhóm thanh niên thực dân không gian, trong khi đang chặn một trạm vũ trụ bị bỏ hoang, đối mặt với dạng sống nguy hiểm nhất trong vũ trụ.",
     director: "Fede Álvarez",
     cast: ["Cailee Spaeny", "David Jonsson", "Archie Renaux", "Isabela Merced"],
@@ -185,21 +198,23 @@ export const cinemas: Cinema[] = [
 ];
 
 export const showtimes: Showtime[] = [
-  { id: 1, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "09:30", hall: "Hall 1", type: "imax", availableSeats: 45, totalSeats: 120 },
-  { id: 2, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "12:15", hall: "Hall 2", type: "standard", availableSeats: 78, totalSeats: 100 },
-  { id: 3, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "15:00", hall: "Hall 3", type: "4dx", availableSeats: 32, totalSeats: 80 },
-  { id: 4, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "18:30", hall: "Hall 1", type: "imax", availableSeats: 15, totalSeats: 120 },
-  { id: 5, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "21:00", hall: "Hall 2", type: "standard", availableSeats: 60, totalSeats: 100 },
-  { id: 6, movieId: 1, cinemaId: 2, date: "2026-06-01", time: "10:00", hall: "Hall A", type: "standard", availableSeats: 55, totalSeats: 90 },
-  { id: 7, movieId: 1, cinemaId: 2, date: "2026-06-01", time: "14:30", hall: "Hall B", type: "sweetbox", availableSeats: 12, totalSeats: 30 },
-  { id: 8, movieId: 1, cinemaId: 2, date: "2026-06-01", time: "19:45", hall: "Hall A", type: "standard", availableSeats: 40, totalSeats: 90 },
-  { id: 9, movieId: 1, cinemaId: 3, date: "2026-06-01", time: "11:00", hall: "Hall X", type: "imax", availableSeats: 20, totalSeats: 150 },
-  { id: 10, movieId: 1, cinemaId: 3, date: "2026-06-01", time: "16:00", hall: "Hall Y", type: "4dx", availableSeats: 38, totalSeats: 60 },
-  { id: 11, movieId: 2, cinemaId: 1, date: "2026-06-01", time: "10:30", hall: "Hall 2", type: "standard", availableSeats: 70, totalSeats: 100 },
-  { id: 12, movieId: 2, cinemaId: 1, date: "2026-06-01", time: "14:00", hall: "Hall 3", type: "4dx", availableSeats: 25, totalSeats: 80 },
-  { id: 13, movieId: 2, cinemaId: 1, date: "2026-06-01", time: "17:45", hall: "Hall 1", type: "imax", availableSeats: 50, totalSeats: 120 },
-  { id: 14, movieId: 3, cinemaId: 2, date: "2026-06-01", time: "09:00", hall: "Hall A", type: "standard", availableSeats: 80, totalSeats: 90 },
-  { id: 15, movieId: 3, cinemaId: 2, date: "2026-06-01", time: "11:30", hall: "Hall B", type: "standard", availableSeats: 65, totalSeats: 90 },
+  { id: 1, movieId: 1, cinemaId: 1, date: day0, time: "09:30", hall: "Hall 1", type: "imax", availableSeats: 45, totalSeats: 120 },
+  { id: 2, movieId: 1, cinemaId: 1, date: day0, time: "12:15", hall: "Hall 2", type: "standard", availableSeats: 78, totalSeats: 100 },
+  { id: 3, movieId: 1, cinemaId: 1, date: day0, time: "15:00", hall: "Hall 3", type: "4dx", availableSeats: 32, totalSeats: 80 },
+  { id: 4, movieId: 1, cinemaId: 1, date: day0, time: "18:30", hall: "Hall 1", type: "imax", availableSeats: 15, totalSeats: 120 },
+  { id: 5, movieId: 1, cinemaId: 1, date: day0, time: "21:00", hall: "Hall 2", type: "standard", availableSeats: 60, totalSeats: 100 },
+  { id: 6, movieId: 1, cinemaId: 2, date: day1, time: "10:00", hall: "Hall A", type: "standard", availableSeats: 55, totalSeats: 90 },
+  { id: 7, movieId: 1, cinemaId: 2, date: day1, time: "14:30", hall: "Hall B", type: "sweetbox", availableSeats: 12, totalSeats: 30 },
+  { id: 8, movieId: 1, cinemaId: 2, date: day1, time: "19:45", hall: "Hall A", type: "standard", availableSeats: 40, totalSeats: 90 },
+  { id: 9, movieId: 1, cinemaId: 3, date: day2, time: "11:00", hall: "Hall X", type: "imax", availableSeats: 20, totalSeats: 150 },
+  { id: 10, movieId: 1, cinemaId: 3, date: day0, time: "16:00", hall: "Hall Y", type: "4dx", availableSeats: 38, totalSeats: 60 },
+  { id: 11, movieId: 2, cinemaId: 1, date: day0, time: "10:30", hall: "Hall 2", type: "standard", availableSeats: 70, totalSeats: 100 },
+  { id: 12, movieId: 2, cinemaId: 1, date: day1, time: "14:00", hall: "Hall 3", type: "4dx", availableSeats: 25, totalSeats: 80 },
+  { id: 13, movieId: 2, cinemaId: 1, date: day2, time: "17:45", hall: "Hall 1", type: "imax", availableSeats: 50, totalSeats: 120 },
+  { id: 14, movieId: 3, cinemaId: 2, date: day0, time: "09:00", hall: "Hall A", type: "standard", availableSeats: 80, totalSeats: 90 },
+  { id: 15, movieId: 3, cinemaId: 2, date: day1, time: "11:30", hall: "Hall B", type: "standard", availableSeats: 65, totalSeats: 90 },
+  { id: 16, movieId: 3, cinemaId: 1, date: day0, time: "14:15", hall: "Hall 2", type: "standard", availableSeats: 88, totalSeats: 100 },
+  { id: 17, movieId: 3, cinemaId: 1, date: day1, time: "16:45", hall: "Hall 3", type: "standard", availableSeats: 70, totalSeats: 100 },
 ];
 
 export const TICKET_PRICES: Record<string, number> = {
