@@ -218,3 +218,92 @@ export function isSeatLocked(showtimeId: number, seatId: string, currentTxId?: s
   );
 }
 
+export interface RoomConfig {
+  id: string;
+  name: string;
+  cinemaId: number;
+  rows: number;
+  cols: number;
+  seats: Record<string, 'standard' | 'vip' | 'couple'>;
+}
+
+export interface SeatPricingConfig {
+  vipMultiplier: number;
+  coupleMultiplier: number;
+}
+
+export function loadRooms(): RoomConfig[] {
+  const stored = localStorage.getItem("rooms_db");
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {
+      // Continue to seed
+    }
+  }
+
+  // Seed default rooms if not present
+  const defaultRooms: RoomConfig[] = [];
+  const defaultHallsByCinema = [
+    { cinemaId: 1, halls: ["Hall 1", "Hall 2", "Hall 3"] },
+    { cinemaId: 2, halls: ["Hall A", "Hall B"] },
+    { cinemaId: 3, halls: ["Hall X", "Hall Y"] }
+  ];
+
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const rowsCount = 10;
+  const colsCount = 12;
+
+  defaultHallsByCinema.forEach((item, cIdx) => {
+    item.halls.forEach((hallName, hIdx) => {
+      const seatsMap: Record<string, 'standard' | 'vip' | 'couple'> = {};
+      for (let r = 0; r < rowsCount; r++) {
+        const rowLetter = alphabet[r];
+        for (let c = 1; c <= colsCount; c++) {
+          const seatId = `${rowLetter}${c}`;
+          if (rowLetter === "J") {
+            seatsMap[seatId] = "couple";
+          } else if (["F", "G", "H"].includes(rowLetter)) {
+            seatsMap[seatId] = "vip";
+          } else {
+            seatsMap[seatId] = "standard";
+          }
+        }
+      }
+
+      defaultRooms.push({
+        id: `room-c${item.cinemaId}-${hIdx + 1}`,
+        name: hallName,
+        cinemaId: item.cinemaId,
+        rows: rowsCount,
+        cols: colsCount,
+        seats: seatsMap
+      });
+    });
+  });
+
+  localStorage.setItem("rooms_db", JSON.stringify(defaultRooms));
+  return defaultRooms;
+}
+
+export function saveRooms(rooms: RoomConfig[]) {
+  localStorage.setItem("rooms_db", JSON.stringify(rooms));
+}
+
+export function loadSeatPricing(): SeatPricingConfig {
+  const stored = localStorage.getItem("seat_pricing_db");
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch {}
+  }
+  const defaultPricing = { vipMultiplier: 1.3, coupleMultiplier: 2.2 };
+  localStorage.setItem("seat_pricing_db", JSON.stringify(defaultPricing));
+  return defaultPricing;
+}
+
+export function saveSeatPricing(pricing: SeatPricingConfig) {
+  localStorage.setItem("seat_pricing_db", JSON.stringify(pricing));
+}
+
+

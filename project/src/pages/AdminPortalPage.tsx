@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { 
   LayoutDashboard, Film, Calendar, QrCode, LogOut, Plus, Trash2, Edit2, 
   Search, Check, MapPin, TrendingUp, Ticket, DollarSign, Users, Clock, AlertCircle,
-  Monitor, Printer
+  Monitor, Printer, Layers
 } from "lucide-react";
 import type { Movie, Showtime } from "../data/movies";
 import { cinemas, TICKET_PRICES } from "../data/movies";
 import { 
   loadMovies, saveMovies, loadShowtimes, saveShowtimes, 
-  loadTickets, updateTicketStatus, BookedTicket, saveTicket
+  loadTickets, updateTicketStatus, BookedTicket, saveTicket,
+  loadRooms, saveRooms, loadSeatPricing, saveSeatPricing, RoomConfig
 } from "../lib/db";
 import { supabase } from "../lib/supabase";
 
@@ -19,7 +20,7 @@ interface AdminPortalPageProps {
   addSqlLog?: (message: string, type?: 'info' | 'query' | 'lock' | 'success' | 'error') => void;
 }
 
-type Tab = "dashboard" | "movies" | "showtimes" | "tickets" | "sales" | "customers";
+type Tab = "dashboard" | "movies" | "showtimes" | "tickets" | "sales" | "customers" | "rooms";
 
 export default function AdminPortalPage({ 
   userRole: _userRole, onBack, concurrencyConfig, addSqlLog 
@@ -35,6 +36,20 @@ export default function AdminPortalPage({
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
   const [customerForm, setCustomerForm] = useState({ fullName: "", email: "", phone: "", password: "password123" });
+
+  // Room and Seating Layout States
+  const [roomsList, setRoomsList] = useState<RoomConfig[]>([]);
+  const [seatPricing, setSeatPricing] = useState<{ vipMultiplier: number; coupleMultiplier: number }>({ vipMultiplier: 1.3, coupleMultiplier: 2.2 });
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<RoomConfig | null>(null);
+  const [roomForm, setRoomForm] = useState({
+    name: "",
+    cinemaId: 1,
+    rows: 10,
+    cols: 12,
+    seats: {} as Record<string, 'standard' | 'vip' | 'couple'>
+  });
+  const [activeBrush, setActiveBrush] = useState<'standard' | 'vip' | 'couple'>('standard');
 
   // States for direct sales at counter
   const [selectedSalesMovie, setSelectedSalesMovie] = useState<Movie | null>(null);
@@ -319,6 +334,8 @@ export default function AdminPortalPage({
     setShowtimesList(loadShowtimes());
     setTicketsList(loadTickets());
     loadCustomers();
+    setRoomsList(loadRooms());
+    setSeatPricing(loadSeatPricing());
   }, []);
 
   const refreshDB = () => {
@@ -326,6 +343,8 @@ export default function AdminPortalPage({
     setShowtimesList(loadShowtimes());
     setTicketsList(loadTickets());
     loadCustomers();
+    setRoomsList(loadRooms());
+    setSeatPricing(loadSeatPricing());
   };
 
   const loadCustomers = async () => {
@@ -482,6 +501,118 @@ export default function AdminPortalPage({
       }
     }
     loadCustomers();
+  };
+
+  const generateDefaultRoomSeats = (rowsCount: number, colsCount: number) => {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const seatsMap: Record<string, 'standard' | 'vip' | 'couple'> = {};
+    for (let r = 0; r < rowsCount; r++) {
+      const rowLetter = alphabet[r];
+      for (let c = 1; c <= colsCount; c++) {
+        const seatId = `${rowLetter}${c}`;
+        if (r === rowsCount - 1) {
+          seatsMap[seatId] = "couple";
+        } else if (r >= 5 && r <= 7) {
+          seatsMap[seatId] = "vip";
+        } else {
+          seatsMap[seatId] = "standard";
+        }
+      }
+    }
+    return seatsMap;
+  };
+
+  const handleOpenAddRoom = () => {
+    setEditingRoom(null);
+    setRoomForm({
+      name: "",
+      cinemaId: cinemas[0]?.id || 1,
+      rows: 10,
+      cols: 12,
+      seats: generateDefaultRoomSeats(10, 12)
+    });
+    setActiveBrush("standard");
+    setShowRoomModal(true);
+  };
+
+  const handleOpenEditRoom = (room: RoomConfig) => {
+    setEditingRoom(room);
+    setRoomForm({
+      name: room.name,
+      cinemaId: room.cinemaId,
+      rows: room.rows,
+      cols: room.cols,
+      seats: { ...room.seats }
+    });
+    setActiveBrush("standard");
+    setShowRoomModal(true);
+  };
+
+  const handleDeleteRoom = (id: string) => {
+    const room = roomsList.find(r => r.id === id);
+    if (!room) return;
+    const hasShowtimes = showtimesList.some(s => s.hall === room.name && s.cinemaId === room.cinemaId);
+    if (hasShowtimes) {
+      alert("Không thể xóa phòng chiếu này vì đã có lịch chiếu áp dụng phòng này!");
+      return;
+    }
+    if (confirm(`Bạn có chắc chắn muốn xóa phòng chiếu "${room.name}" không?`)) {
+      const updated = roomsList.filter(r => r.id !== id);
+      saveRooms(updated);
+      refreshDB();
+    }
+  };
+
+  const handleSaveRoom = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roomForm.name.trim()) {
+      alert("Vui lòng điền tên phòng chiếu.");
+      return;
+    }
+
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const cleanedSeats: Record<string, 'standard' | 'vip' | 'couple'> = {};
+    for (let r = 0; r < roomForm.rows; r++) {
+      const rowLetter = alphabet[r];
+      for (let c = 1; c <= roomForm.cols; c++) {
+        const seatId = `${rowLetter}${c}`;
+        cleanedSeats[seatId] = roomForm.seats[seatId] || "standard";
+      }
+    }
+
+    if (editingRoom) {
+      const updated = roomsList.map(r => r.id === editingRoom.id ? {
+        ...r,
+        name: roomForm.name,
+        cinemaId: Number(roomForm.cinemaId),
+        rows: roomForm.rows,
+        cols: roomForm.cols,
+        seats: cleanedSeats
+      } : r);
+      saveRooms(updated);
+      alert("Cập nhật phòng chiếu thành công.");
+    } else {
+      const newId = `room-c${roomForm.cinemaId}-${Date.now()}`;
+      const newRoom = {
+        id: newId,
+        name: roomForm.name,
+        cinemaId: Number(roomForm.cinemaId),
+        rows: roomForm.rows,
+        cols: roomForm.cols,
+        seats: cleanedSeats
+      };
+      saveRooms([...roomsList, newRoom]);
+      alert("Thêm phòng chiếu thành công.");
+    }
+    setShowRoomModal(false);
+    refreshDB();
+  };
+
+  const handleSavePricing = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveSeatPricing(seatPricing);
+    alert("Cập nhật bảng giá loại ghế thành công.");
+    refreshDB();
   };
 
   // Movie CRUD actions
@@ -688,6 +819,7 @@ export default function AdminPortalPage({
     { id: "tickets", label: "Soát Vé & Giao Dịch", icon: QrCode },
     { id: "sales", label: "Bán Vé Tại Quầy", icon: Ticket },
     { id: "customers", label: "Quản Lý Khách Hàng", icon: Users },
+    { id: "rooms", label: "Quản Lý Phòng & Ghế", icon: Layers },
   ];
 
   return (
@@ -1543,8 +1675,21 @@ export default function AdminPortalPage({
                       <div className="overflow-x-auto py-2">
                         <div className="flex flex-col gap-1.5 items-center min-w-fit">
                           {(() => {
-                            const rows = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
-                            const cols = Array.from({ length: 12 }, (_, i) => i + 1);
+                            let rows = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+                            let cols = Array.from({ length: 12 }, (_, i) => i + 1);
+                            
+                            let matchingRoom: any = null;
+                            if (selectedSalesShowtime) {
+                              matchingRoom = roomsList.find((r) => r.name === selectedSalesShowtime.hall && r.cinemaId === selectedSalesShowtime.cinemaId);
+                            }
+
+                            let customSeats: Record<string, 'standard' | 'vip' | 'couple'> = {};
+                            if (matchingRoom) {
+                              const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                              rows = Array.from({ length: matchingRoom.rows }, (_, i) => alphabet[i]);
+                              cols = Array.from({ length: matchingRoom.cols }, (_, i) => i + 1);
+                              customSeats = matchingRoom.seats || {};
+                            }
                             
                             // Lấy danh sách ghế đã bán cho suất chiếu này
                             const soldSeatsForShowtime = new Set<string>();
@@ -1575,8 +1720,12 @@ export default function AdminPortalPage({
                                       const isSelected = salesSelectedSeats.includes(seatId);
                                       
                                       let seatType: "standard" | "vip" | "couple" = "standard";
-                                      if (row === coupleRow) seatType = "couple";
-                                      else if (vipRows.has(row)) seatType = "vip";
+                                      if (matchingRoom) {
+                                        seatType = customSeats[seatId] || "standard";
+                                      } else {
+                                        if (row === coupleRow) seatType = "couple";
+                                        else if (vipRows.has(row)) seatType = "vip";
+                                      }
 
                                       let btnClass = "w-7 h-7 rounded-t text-[10px] font-bold border border-b-2 transition-all flex items-center justify-center cursor-pointer select-none ";
                                       if (isSold) {
@@ -1722,13 +1871,24 @@ export default function AdminPortalPage({
                     {/* Chi phí & Nút xác nhận */}
                     {(() => {
                       const basePrice = selectedSalesShowtime ? TICKET_PRICES[selectedSalesShowtime.type] : 0;
-                      const vipMultiplier = 1.3;
-                      const coupleMultiplier = 2.2;
                       
+                      let matchingRoom: any = null;
+                      if (selectedSalesShowtime) {
+                        matchingRoom = roomsList.find((r) => r.name === selectedSalesShowtime.hall && r.cinemaId === selectedSalesShowtime.cinemaId);
+                      }
+
                       const total = salesSelectedSeats.reduce((sum, seat) => {
-                        const row = seat[0];
-                        if (["F", "G", "H"].includes(row)) return sum + basePrice * vipMultiplier;
-                        if (row === "J") return sum + basePrice * coupleMultiplier;
+                        let seatType = "standard";
+                        if (matchingRoom) {
+                          seatType = matchingRoom.seats?.[seat] || "standard";
+                        } else {
+                          const row = seat[0];
+                          if (["F", "G", "H"].includes(row)) seatType = "vip";
+                          else if (row === "J") seatType = "couple";
+                        }
+
+                        if (seatType === "vip") return sum + basePrice * seatPricing.vipMultiplier;
+                        if (seatType === "couple") return sum + basePrice * seatPricing.coupleMultiplier;
                         return sum + basePrice;
                       }, 0);
 
@@ -1921,6 +2081,156 @@ export default function AdminPortalPage({
                       })()}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ROOMS TAB */}
+          {activeTab === "rooms" && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Rooms List (2 cols on large screen) */}
+              <div className="lg:col-span-2 space-y-6">
+                <div className="flex justify-between items-center">
+                  <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                    <Layers className="w-6 h-6 text-red-500" />
+                    Quản Lý Phòng Chiếu
+                  </h1>
+                  <button
+                    onClick={handleOpenAddRoom}
+                    className="bg-red-600 hover:bg-red-500 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center gap-2 transition-all cursor-pointer text-sm shadow-lg shadow-red-600/15"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Thêm Phòng Chiếu
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {roomsList.map((room) => {
+                    const totalSeats = room.rows * room.cols;
+                    const seatsMap = room.seats || {};
+                    const counts = { standard: 0, vip: 0, couple: 0 };
+                    Object.values(seatsMap).forEach(type => {
+                      counts[type] = (counts[type] || 0) + 1;
+                    });
+                    const cinema = cinemas.find(c => c.id === room.cinemaId);
+
+                    return (
+                      <div key={room.id} className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-2xl p-5 space-y-4 shadow-xl transition-all group relative overflow-hidden">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="text-white font-bold text-lg">{room.name}</h3>
+                            <p className="text-xs text-gray-500 font-sans mt-0.5 flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-zinc-500" />
+                              {cinema?.name || `Cinema (ID: ${room.cinemaId})`}
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5 opacity-65 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleOpenEditRoom(room)}
+                              className="p-1.5 bg-zinc-800 hover:bg-zinc-750 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer"
+                              title="Sửa lưới ghế"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRoom(room.id)}
+                              className="p-1.5 bg-red-950/20 hover:bg-red-900/40 text-red-400 hover:text-red-300 rounded-lg transition-all border border-red-500/5 cursor-pointer"
+                              title="Xóa phòng"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-zinc-800 flex justify-between items-center text-xs font-mono text-gray-400">
+                          <div>Sức chứa: <strong className="text-white">{totalSeats} ghế</strong></div>
+                          <div>Kích thước: <strong className="text-white">{room.rows}x{room.cols}</strong></div>
+                        </div>
+
+                        {/* Breakdown block */}
+                        <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-bold font-sans pt-1">
+                          <div className="bg-slate-700/20 text-slate-400 border border-slate-700/30 rounded-lg py-1">
+                            {counts.standard} Thường
+                          </div>
+                          <div className="bg-amber-600/10 text-amber-400 border border-amber-500/10 rounded-lg py-1">
+                            {counts.vip} VIP
+                          </div>
+                          <div className="bg-rose-700/10 text-rose-400 border border-rose-500/10 rounded-lg py-1">
+                            {counts.couple} Cặp
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right Column: Pricing Rules (1 col on large screen) */}
+              <div className="space-y-6">
+                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <DollarSign className="w-6 h-6 text-emerald-500" />
+                  Bảng Phụ Thu Ghế
+                </h1>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-xl space-y-6">
+                  <div>
+                    <h3 className="text-white font-bold text-base">Hệ số nhân phụ thu</h3>
+                    <p className="text-gray-500 text-xs mt-1">
+                      Giá vé của ghế = Giá vé cơ bản của suất chiếu × Hệ số nhân tương ứng.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleSavePricing} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 font-sans">
+                        Hệ số nhân ghế VIP
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="1"
+                          required
+                          value={seatPricing.vipMultiplier}
+                          onChange={e => setSeatPricing({ ...seatPricing, vipMultiplier: parseFloat(e.target.value) || 1 })}
+                          className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-red-500 w-full"
+                        />
+                        <span className="text-sm font-bold text-gray-400">x</span>
+                      </div>
+                      <p className="text-[10px] text-gray-600 font-sans mt-1">
+                        Ví dụ: Suất 90,000đ → Ghế VIP = 90,000đ × {seatPricing.vipMultiplier} = {Math.round(90000 * seatPricing.vipMultiplier).toLocaleString('vi-VN')}đ
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 font-sans">
+                        Hệ số nhân ghế Đôi (Sweetbox)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="1"
+                          required
+                          value={seatPricing.coupleMultiplier}
+                          onChange={e => setSeatPricing({ ...seatPricing, coupleMultiplier: parseFloat(e.target.value) || 1 })}
+                          className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-red-500 w-full"
+                        />
+                        <span className="text-sm font-bold text-gray-400">x</span>
+                      </div>
+                      <p className="text-[10px] text-gray-600 font-sans mt-1">
+                        Ví dụ: Suất 90,000đ → Ghế Đôi = 90,000đ × {seatPricing.coupleMultiplier} = {Math.round(90000 * seatPricing.coupleMultiplier).toLocaleString('vi-VN')}đ
+                      </p>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-emerald-650 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all cursor-pointer shadow-lg shadow-emerald-600/10 active:scale-[0.98] font-sans"
+                    >
+                      Lưu Bảng Phụ Thu
+                    </button>
+                  </form>
                 </div>
               </div>
             </div>
@@ -2247,6 +2557,224 @@ export default function AdminPortalPage({
                   Lưu
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD/EDIT ROOM MODAL */}
+      {showRoomModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-6 animate-in fade-in duration-200">
+            <div className="flex justify-between items-center pb-4 border-b border-zinc-800">
+              <h3 className="text-white font-bold text-xl font-sans">
+                {editingRoom ? `Cấu Hình Lưới Ghế: ${editingRoom.name}` : "Thêm Phòng Chiếu Mới"}
+              </h3>
+              <button onClick={() => setShowRoomModal(false)} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={handleSaveRoom} className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-sm font-sans">
+              
+              {/* Left Column: Properties (4 cols) */}
+              <div className="lg:col-span-4 space-y-4">
+                <div>
+                  <label className="block text-gray-400 mb-1.5 font-medium">Tên Phòng Chiếu</label>
+                  <input
+                    type="text" required
+                    value={roomForm.name}
+                    onChange={e => setRoomForm({...roomForm, name: e.target.value})}
+                    placeholder="Ví dụ: Hall Premium, Phòng 5..."
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-400 mb-1.5 font-medium">Thuộc Rạp Chiếu</label>
+                  <select
+                    value={roomForm.cinemaId}
+                    onChange={e => setRoomForm({...roomForm, cinemaId: Number(e.target.value)})}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-red-500/50"
+                  >
+                    {cinemas.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.city})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-400 mb-1.5 font-medium">Số Hàng Ghế (max 15)</label>
+                    <input
+                      type="number" min="1" max="15" required
+                      value={roomForm.rows}
+                      onChange={e => {
+                        const r = Math.min(15, Math.max(1, parseInt(e.target.value) || 1));
+                        const newSeats = { ...roomForm.seats };
+                        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                        for (let i = 0; i < r; i++) {
+                          const rowL = alphabet[i];
+                          for (let c = 1; c <= roomForm.cols; c++) {
+                            const sid = `${rowL}${c}`;
+                            if (!newSeats[sid]) newSeats[sid] = "standard";
+                          }
+                        }
+                        setRoomForm({...roomForm, rows: r, seats: newSeats});
+                      }}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-red-500/50 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 mb-1.5 font-medium">Số Cột Ghế (max 20)</label>
+                    <input
+                      type="number" min="1" max="20" required
+                      value={roomForm.cols}
+                      onChange={e => {
+                        const colVal = Math.min(20, Math.max(1, parseInt(e.target.value) || 1));
+                        const newSeats = { ...roomForm.seats };
+                        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                        for (let i = 0; i < roomForm.rows; i++) {
+                          const rowL = alphabet[i];
+                          for (let c = 1; c <= colVal; c++) {
+                            const sid = `${rowL}${c}`;
+                            if (!newSeats[sid]) newSeats[sid] = "standard";
+                          }
+                        }
+                        setRoomForm({...roomForm, cols: colVal, seats: newSeats});
+                      }}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-red-500/50 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-zinc-800 space-y-3">
+                  <h4 className="text-gray-400 font-bold text-xs uppercase tracking-wider">Công cụ gán loại ghế</h4>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveBrush("standard")}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        activeBrush === "standard"
+                          ? "bg-slate-700 text-white border-slate-500 shadow-md shadow-slate-700/20"
+                          : "bg-zinc-850 hover:bg-zinc-800 text-slate-300 border-zinc-800"
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded bg-slate-650 inline-block border border-slate-500" />
+                      Ghế Thường (Standard)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveBrush("vip")}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        activeBrush === "vip"
+                          ? "bg-amber-600/20 text-amber-400 border-amber-500/40 shadow-md shadow-amber-600/10"
+                          : "bg-zinc-850 hover:bg-zinc-800 text-amber-400/80 border-zinc-800"
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded bg-amber-600 inline-block border border-amber-500" />
+                      Ghế VIP (Surcharge)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveBrush("couple")}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        activeBrush === "couple"
+                          ? "bg-rose-700/20 text-rose-400 border-rose-500/40 shadow-md shadow-rose-700/10"
+                          : "bg-zinc-850 hover:bg-zinc-800 text-rose-400/80 border-zinc-800"
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded bg-rose-700 inline-block border border-rose-500" />
+                      Ghế Đôi (Sweetbox)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRoomForm({
+                        ...roomForm,
+                        seats: generateDefaultRoomSeats(roomForm.rows, roomForm.cols)
+                      });
+                    }}
+                    className="w-full bg-zinc-800 hover:bg-zinc-750 text-gray-300 py-2.5 rounded-xl border border-zinc-700 transition-all font-semibold text-xs cursor-pointer"
+                  >
+                    Gán Lưới Mặc Định
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Visual Editor Grid (8 cols) */}
+              <div className="lg:col-span-8 flex flex-col space-y-4">
+                <div className="bg-zinc-950 border border-zinc-850 rounded-2xl p-5 flex flex-col items-center">
+                  <h4 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-6">Màn hình phía trước</h4>
+                  <div className="w-full max-w-sm h-1.5 bg-gradient-to-b from-red-500/30 to-transparent rounded-full mb-8" />
+
+                  {/* Grid Scroll Area */}
+                  <div className="w-full overflow-x-auto py-2 flex flex-col items-center">
+                    <div className="flex flex-col gap-1.5 min-w-fit">
+                      {(() => {
+                        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                        const rowsList = Array.from({ length: roomForm.rows }, (_, i) => alphabet[i]);
+                        const colsList = Array.from({ length: roomForm.cols }, (_, i) => i + 1);
+
+                        return rowsList.map(row => (
+                          <div key={row} className="flex items-center gap-1.5">
+                            <span className="w-5 text-center text-gray-600 text-xs font-mono font-bold">{row}</span>
+                            <div className="flex gap-1.5">
+                              {colsList.map(col => {
+                                const seatId = `${row}${col}`;
+                                const type = roomForm.seats[seatId] || "standard";
+
+                                let btnClass = "w-7 h-7 rounded text-[10px] font-bold border transition-all flex items-center justify-center cursor-pointer select-none ";
+                                if (type === "vip") btnClass += "bg-amber-600 border-amber-500 border-b-2 text-white hover:opacity-80";
+                                else if (type === "couple") btnClass += "bg-rose-700 border-rose-600 border-b-2 text-white hover:opacity-80";
+                                else btnClass += "bg-slate-700 border-slate-500 border-b-2 text-slate-300 hover:opacity-80";
+
+                                return (
+                                  <button
+                                    key={seatId}
+                                    type="button"
+                                    onClick={() => {
+                                      const nextSeats = { ...roomForm.seats };
+                                      nextSeats[seatId] = activeBrush;
+                                      setRoomForm({ ...roomForm, seats: nextSeats });
+                                    }}
+                                    className={btnClass}
+                                    title={`${seatId} (${type})`}
+                                  >
+                                    {col}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <span className="w-5 text-center text-gray-600 text-xs font-mono font-bold">{row}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4 border-t border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowRoomModal(false)}
+                    className="px-4 py-2.5 bg-zinc-850 hover:bg-zinc-800 text-white rounded-lg transition-colors cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition-colors cursor-pointer"
+                  >
+                    Lưu Phòng Chiếu
+                  </button>
+                </div>
+              </div>
+
             </form>
           </div>
         </div>

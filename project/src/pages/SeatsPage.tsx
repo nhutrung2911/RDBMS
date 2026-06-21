@@ -361,13 +361,21 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
     }
   };
 
-  const rows = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
-  const cols = Array.from({ length: 12 }, (_, i) => i + 1);
+  const rows = useMemo(() => {
+    if (matchingRoom) {
+      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      return Array.from({ length: matchingRoom.rows }, (_, i) => alphabet[i]);
+    }
+    return ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+  }, [matchingRoom]);
+
+  const cols = useMemo(() => {
+    const len = matchingRoom ? matchingRoom.cols : 12;
+    return Array.from({ length: len }, (_, i) => i + 1);
+  }, [matchingRoom]);
 
   const cinema = cinemas.find((c) => c.id === showtime.cinemaId);
   const basePrice = TICKET_PRICES[showtime.type];
-  const vipMultiplier = 1.3;
-  const coupleMultiplier = 2.2;
 
   const selectedSeats = useMemo(
     () => Object.entries(seatMap).filter(([, s]) => s === "selected" || s === "vip_selected" || s === "couple_selected").map(([k]) => k),
@@ -376,12 +384,20 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
 
   const totalPrice = useMemo(() => {
     return selectedSeats.reduce((sum, seat) => {
-      const row = seat[0];
-      if (["F", "G", "H"].includes(row)) return sum + basePrice * vipMultiplier;
-      if (row === "J") return sum + basePrice * coupleMultiplier;
+      let seatType = "standard";
+      if (matchingRoom) {
+        seatType = matchingRoom.seats?.[seat] || "standard";
+      } else {
+        const row = seat[0];
+        if (["F", "G", "H"].includes(row)) seatType = "vip";
+        else if (row === "J") seatType = "couple";
+      }
+
+      if (seatType === "vip") return sum + basePrice * pricingConfig.vipMultiplier;
+      if (seatType === "couple") return sum + basePrice * pricingConfig.coupleMultiplier;
       return sum + basePrice;
     }, 0);
-  }, [selectedSeats, basePrice]);
+  }, [selectedSeats, basePrice, matchingRoom, pricingConfig]);
 
 
 
@@ -503,8 +519,8 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
           <div className="flex flex-wrap gap-4 justify-center mt-8">
             {[
               { color: "bg-slate-700 border-slate-500 border-b-slate-400", label: `Thường (${formatPrice(basePrice)}đ)` },
-              { color: "bg-amber-700/70 border-amber-600 border-b-amber-500", label: `VIP (${formatPrice(basePrice * 1.3)}đ)` },
-              { color: "bg-rose-800/60 border-rose-700 border-b-rose-600", label: `Đôi (${formatPrice(basePrice * 2.2)}đ)` },
+              { color: "bg-amber-700/70 border-amber-600 border-b-amber-500", label: `VIP (${formatPrice(basePrice * pricingConfig.vipMultiplier)}đ)` },
+              { color: "bg-rose-800/60 border-rose-700 border-b-rose-600", label: `Đôi (${formatPrice(basePrice * pricingConfig.coupleMultiplier)}đ)` },
               { color: "bg-red-600 border-red-500 border-b-red-400", label: "Đã chọn" },
               { color: "bg-zinc-800 border-zinc-700", label: "Đã bán" },
             ].map((l) => (
