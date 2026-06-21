@@ -10,6 +10,7 @@ import {
   loadMovies, saveMovies, loadShowtimes, saveShowtimes, 
   loadTickets, updateTicketStatus, BookedTicket, saveTicket
 } from "../lib/db";
+import { supabase } from "../lib/supabase";
 
 interface AdminPortalPageProps {
   userRole: "customer" | "admin" | null;
@@ -18,7 +19,7 @@ interface AdminPortalPageProps {
   addSqlLog?: (message: string, type?: 'info' | 'query' | 'lock' | 'success' | 'error') => void;
 }
 
-type Tab = "dashboard" | "movies" | "showtimes" | "tickets" | "sales";
+type Tab = "dashboard" | "movies" | "showtimes" | "tickets" | "sales" | "customers";
 
 export default function AdminPortalPage({ 
   userRole: _userRole, onBack, concurrencyConfig, addSqlLog 
@@ -27,6 +28,13 @@ export default function AdminPortalPage({
   const [moviesList, setMoviesList] = useState<Movie[]>([]);
   const [showtimesList, setShowtimesList] = useState<Showtime[]>([]);
   const [ticketsList, setTicketsList] = useState<BookedTicket[]>([]);
+
+  // Customer Management States
+  const [customersList, setCustomersList] = useState<any[]>([]);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
+  const [customerForm, setCustomerForm] = useState({ fullName: "", email: "", phone: "", password: "password123" });
 
   // States for direct sales at counter
   const [selectedSalesMovie, setSelectedSalesMovie] = useState<Movie | null>(null);
@@ -310,14 +318,170 @@ export default function AdminPortalPage({
     setMoviesList(loadMovies());
     setShowtimesList(loadShowtimes());
     setTicketsList(loadTickets());
+    loadCustomers();
   }, []);
-
-
 
   const refreshDB = () => {
     setMoviesList(loadMovies());
     setShowtimesList(loadShowtimes());
     setTicketsList(loadTickets());
+    loadCustomers();
+  };
+
+  const loadCustomers = async () => {
+    const isMock = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'YOUR_SUPABASE_URL';
+    if (isMock) {
+      try {
+        const mockUsers = JSON.parse(localStorage.getItem("mock_supabase_users") || "[]");
+        const list = mockUsers.map((u: any) => ({
+          id: u.id,
+          fullName: u.fullName || u.user_metadata?.full_name || "Chưa đặt tên",
+          email: u.email,
+          phone: u.phone || u.user_metadata?.phone || "Chưa có SĐT",
+          role: u.user_metadata?.role || "customer"
+        }));
+        setCustomersList(list);
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      const { data, error } = await supabase.from("Customer").select("*");
+      if (!error && data) {
+        setCustomersList(data.map((c: any) => ({
+          id: c.CustomerId,
+          fullName: c.FullName,
+          phone: c.Phone,
+          email: c.Email,
+          role: "customer"
+        })));
+      } else {
+        try {
+          const mockUsers = JSON.parse(localStorage.getItem("mock_supabase_users") || "[]");
+          const list = mockUsers.map((u: any) => ({
+            id: u.id,
+            fullName: u.fullName || u.user_metadata?.full_name || "Chưa đặt tên",
+            email: u.email,
+            phone: u.phone || u.user_metadata?.phone || "Chưa có SĐT",
+            role: u.user_metadata?.role || "customer"
+          }));
+          setCustomersList(list);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  };
+
+  const handleSaveCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customerForm.fullName.trim() || !customerForm.email.trim() || !customerForm.phone.trim()) {
+      alert("Vui lòng điền đầy đủ thông tin.");
+      return;
+    }
+    const isMock = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'YOUR_SUPABASE_URL';
+    
+    if (editingCustomer) {
+      if (isMock) {
+        try {
+          const mockUsers = JSON.parse(localStorage.getItem("mock_supabase_users") || "[]");
+          const updated = mockUsers.map((u: any) => {
+            if (u.id === editingCustomer.id) {
+              return {
+                ...u,
+                fullName: customerForm.fullName,
+                phone: customerForm.phone,
+                email: customerForm.email,
+                user_metadata: {
+                  ...u.user_metadata,
+                  full_name: customerForm.fullName,
+                  phone: customerForm.phone
+                }
+              };
+            }
+            return u;
+          });
+          localStorage.setItem("mock_supabase_users", JSON.stringify(updated));
+          alert("Cập nhật thông tin khách hàng thành công.");
+        } catch (err) {
+          console.error(err);
+        }
+      } else {
+        const { error } = await supabase.from("Customer").update({
+          FullName: customerForm.fullName,
+          Phone: customerForm.phone,
+          Email: customerForm.email
+        }).eq("CustomerId", editingCustomer.id);
+        if (error) {
+          alert("Lỗi khi cập nhật Supabase: " + error.message);
+        } else {
+          alert("Cập nhật khách hàng thành công.");
+        }
+      }
+    } else {
+      if (isMock) {
+        try {
+          const mockUsers = JSON.parse(localStorage.getItem("mock_supabase_users") || "[]");
+          if (mockUsers.some((u: any) => u.email === customerForm.email)) {
+            alert("Email này đã được đăng ký!");
+            return;
+          }
+          const newId = "user-" + Math.random().toString(36).substring(2, 9);
+          const newUser = {
+            id: newId,
+            email: customerForm.email,
+            password: customerForm.password || "password123",
+            fullName: customerForm.fullName,
+            phone: customerForm.phone,
+            user_metadata: {
+              full_name: customerForm.fullName,
+              role: "customer",
+              phone: customerForm.phone
+            }
+          };
+          mockUsers.push(newUser);
+          localStorage.setItem("mock_supabase_users", JSON.stringify(mockUsers));
+          alert("Thêm khách hàng thành công.");
+        } catch (err) {
+          console.error(err);
+        }
+      } else {
+        const { error } = await supabase.from("Customer").insert({
+          FullName: customerForm.fullName,
+          Phone: customerForm.phone,
+          Email: customerForm.email
+        });
+        if (error) {
+          alert("Lỗi khi thêm vào Supabase: " + error.message);
+        } else {
+          alert("Thêm khách hàng thành công.");
+        }
+      }
+    }
+    setShowCustomerModal(false);
+    loadCustomers();
+  };
+
+  const handleDeleteCustomer = async (id: any) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa khách hàng này không?")) return;
+    const isMock = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'YOUR_SUPABASE_URL';
+    if (isMock) {
+      try {
+        const mockUsers = JSON.parse(localStorage.getItem("mock_supabase_users") || "[]");
+        const updated = mockUsers.filter((u: any) => u.id !== id);
+        localStorage.setItem("mock_supabase_users", JSON.stringify(updated));
+        alert("Xóa khách hàng thành công.");
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      const { error } = await supabase.from("Customer").delete().eq("CustomerId", id);
+      if (error) {
+        alert("Lỗi khi xóa khách hàng: " + error.message);
+      } else {
+        alert("Xóa khách hàng thành công.");
+      }
+    }
+    loadCustomers();
   };
 
   // Movie CRUD actions
@@ -523,6 +687,7 @@ export default function AdminPortalPage({
     { id: "showtimes", label: "Quản Lý Suất Chiếu", icon: Calendar },
     { id: "tickets", label: "Soát Vé & Giao Dịch", icon: QrCode },
     { id: "sales", label: "Bán Vé Tại Quầy", icon: Ticket },
+    { id: "customers", label: "Quản Lý Khách Hàng", icon: Users },
   ];
 
   return (
@@ -1638,6 +1803,129 @@ export default function AdminPortalPage({
             </div>
           )}
 
+          {/* CUSTOMERS TAB */}
+          {activeTab === "customers" && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Users className="w-6 h-6 text-red-500" />
+                  Quản Lý Khách Hàng
+                </h1>
+                <button
+                  onClick={() => {
+                    setEditingCustomer(null);
+                    setCustomerForm({ fullName: "", email: "", phone: "", password: "password123" });
+                    setShowCustomerModal(true);
+                  }}
+                  className="bg-red-600 hover:bg-red-500 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center gap-2 transition-all cursor-pointer text-sm shadow-lg shadow-red-600/15"
+                >
+                  <Plus className="w-4 h-4" />
+                  Thêm Khách Hàng
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center gap-2">
+                <Search className="w-4 h-4 text-zinc-500 ml-2" />
+                <input
+                  type="text"
+                  value={customerSearchQuery}
+                  onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                  placeholder="Tìm kiếm khách hàng theo tên, số điện thoại hoặc email..."
+                  className="w-full bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Customers Table */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm text-gray-300">
+                    <thead className="bg-zinc-950/40 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-zinc-800">
+                      <tr>
+                        <th className="px-6 py-4 font-sans">Mã KH</th>
+                        <th className="px-6 py-4 font-sans">Họ Và Tên</th>
+                        <th className="px-6 py-4 font-sans">Số Điện Thoại</th>
+                        <th className="px-6 py-4 font-sans">Email</th>
+                        <th className="px-6 py-4 font-sans">Vai Trò</th>
+                        <th className="px-6 py-4 font-sans text-right">Thao Tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60 font-sans">
+                      {(() => {
+                        const filtered = customersList.filter(c => {
+                          const q = customerSearchQuery.toLowerCase();
+                          return (
+                            (c.fullName && c.fullName.toLowerCase().includes(q)) ||
+                            (c.email && c.email.toLowerCase().includes(q)) ||
+                            (c.phone && c.phone.includes(q)) ||
+                            (c.id && String(c.id).toLowerCase().includes(q))
+                          );
+                        });
+
+                        if (filtered.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={6} className="px-6 py-12 text-center text-zinc-500">
+                                Không tìm thấy khách hàng nào phù hợp.
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return filtered.map((c, idx) => (
+                          <tr key={idx} className="hover:bg-white/[0.02] transition-colors group">
+                            <td className="px-6 py-4 text-xs font-mono text-gray-500">#{c.id}</td>
+                            <td className="px-6 py-4 font-semibold text-white">{c.fullName}</td>
+                            <td className="px-6 py-4 font-mono text-zinc-400">{c.phone}</td>
+                            <td className="px-6 py-4 font-mono text-zinc-400">{c.email}</td>
+                            <td className="px-6 py-4">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                c.role === "admin" 
+                                  ? "bg-red-500/10 text-red-400 border border-red-500/10" 
+                                  : "bg-zinc-800 text-gray-400 border border-zinc-700"
+                              }`}>
+                                {c.role === "admin" ? "Quản trị" : "Khách hàng"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => {
+                                    setEditingCustomer(c);
+                                    setCustomerForm({
+                                      fullName: c.fullName,
+                                      email: c.email,
+                                      phone: c.phone,
+                                      password: ""
+                                    });
+                                    setShowCustomerModal(true);
+                                  }}
+                                  className="p-1.5 bg-zinc-800 hover:bg-zinc-750 text-gray-300 hover:text-white rounded-lg transition-all cursor-pointer"
+                                  title="Chỉnh sửa"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                {c.role !== "admin" && (
+                                  <button
+                                    onClick={() => handleDeleteCustomer(c.id)}
+                                    className="p-1.5 bg-red-950/20 hover:bg-red-900/40 text-red-400 hover:text-red-300 rounded-lg transition-all border border-red-500/5 cursor-pointer"
+                                    title="Xóa khách hàng"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
         </main>
       </div>
 
@@ -1876,6 +2164,85 @@ export default function AdminPortalPage({
                 <button
                   type="submit"
                   className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition-colors"
+                >
+                  Lưu
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD/EDIT CUSTOMER MODAL */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-6 animate-in fade-in duration-200">
+            <div className="flex justify-between items-center pb-4 border-b border-zinc-800">
+              <h3 className="text-white font-bold text-xl font-sans">
+                {editingCustomer ? "Cập Nhật Khách Hàng" : "Thêm Khách Hàng Mới"}
+              </h3>
+              <button onClick={() => setShowCustomerModal(false)} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={handleSaveCustomer} className="space-y-4 text-sm font-sans">
+              <div>
+                <label className="block text-gray-400 mb-1.5 font-medium">Họ Và Tên</label>
+                <input
+                  type="text" required
+                  value={customerForm.fullName}
+                  onChange={e => setCustomerForm({...customerForm, fullName: e.target.value})}
+                  placeholder="Nguyễn Văn A"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-400 mb-1.5 font-medium">Số Điện Thoại</label>
+                <input
+                  type="text" required
+                  value={customerForm.phone}
+                  onChange={e => setCustomerForm({...customerForm, phone: e.target.value})}
+                  placeholder="0912345678"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-400 mb-1.5 font-medium">Email</label>
+                <input
+                  type="email" required
+                  value={customerForm.email}
+                  disabled={!!editingCustomer}
+                  onChange={e => setCustomerForm({...customerForm, email: e.target.value})}
+                  placeholder="email@example.com"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              {!editingCustomer && (
+                <div>
+                  <label className="block text-gray-400 mb-1.5 font-medium">Mật Khẩu Khởi Tạo</label>
+                  <input
+                    type="password" required
+                    value={customerForm.password}
+                    onChange={e => setCustomerForm({...customerForm, password: e.target.value})}
+                    placeholder="Mật khẩu từ 6 ký tự trở lên"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono"
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomerModal(false)}
+                  className="px-4 py-2.5 bg-zinc-850 hover:bg-zinc-800 text-white rounded-lg transition-colors cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition-colors cursor-pointer"
                 >
                   Lưu
                 </button>

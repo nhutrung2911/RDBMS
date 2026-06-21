@@ -39,7 +39,6 @@ export default function Navbar({ onNavigate, currentPage, userEmail, userRole, o
             {[
               { label: "Phim Đang Chiếu", page: "home" },
               { label: "Phim Sắp Chiếu", page: "coming_soon" },
-              { label: "Khuyến Mãi", page: "promotions" },
             ].map((item) => (
               <button
                 key={item.page}
@@ -162,7 +161,6 @@ export default function Navbar({ onNavigate, currentPage, userEmail, userRole, o
           {[
             { label: "Phim Đang Chiếu", page: "home" },
             { label: "Phim Sắp Chiếu", page: "coming_soon" },
-            { label: "Khuyến Mãi", page: "promotions" },
             { label: "Vé Của Tôi", page: "my_tickets" },
             ...(showAdminLink ? [{ label: "Quản Trị Hệ Thống", page: "admin" }] : []),
           ].map((item) => (

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { ArrowLeft, Monitor, ChevronRight, Minus, Plus, CheckCircle2, ShieldAlert, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Monitor, ChevronRight, CheckCircle2, ShieldAlert, AlertTriangle } from "lucide-react";
 import type { Movie, Showtime } from "../data/movies";
 import { cinemas, TICKET_PRICES } from "../data/movies";
 import { 
@@ -53,19 +53,8 @@ const TYPE_LABELS: Record<string, string> = {
   standard: "Standard", "4dx": "4DX", imax: "IMAX", sweetbox: "Sweetbox",
 };
 
-const COMBOS = [
-  { id: "solo", name: "Combo Solo", desc: "1 Bắp ngọt lớn + 1 Nước ngọt lớn", price: 60000, icon: "🍿" },
-  { id: "double", name: "Combo Double", desc: "1 Bắp ngọt lớn + 2 Nước ngọt lớn", price: 85000, icon: "🥤" },
-  { id: "party", name: "Combo Party", desc: "2 Bắp ngọt lớn + 4 Nước ngọt lớn", price: 150000, icon: "🎉" }
-];
-
 export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurrencyConfig, addSqlLog }: SeatsPageProps) {
   const [seatMap, setSeatMap] = useState<Record<string, SeatStatus>>(generateSeats);
-  const [selectedCombos, setSelectedCombos] = useState<Record<string, number>>({
-    solo: 0,
-    double: 0,
-    party: 0
-  });
   const [simState, setSimState] = useState<{
     isActive: boolean;
     message: string;
@@ -117,12 +106,7 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
     const txId = "TX_" + Math.random().toString(36).substring(2, 7).toUpperCase();
     const delay = concurrencyConfig.latencyMs || 1500;
     
-    const combosList = Object.entries(selectedCombos)
-      .filter(([, qty]) => qty > 0)
-      .map(([id, qty]) => {
-        const c = COMBOS.find(x => x.id === id)!;
-        return { name: c.name, quantity: qty, price: c.price };
-      });
+    const combosList: { name: string; quantity: number; price: number }[] = [];
 
     // 1. LOST UPDATE SCENARIO
     if (concurrencyConfig.scenario === "lost_update") {
@@ -197,7 +181,7 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
         });
         setTimeout(() => {
           setSimState(prev => ({ ...prev, isActive: false }));
-          onConfirm(selectedSeats, overallTotalPrice, combosList);
+          onConfirm(selectedSeats, totalPrice, combosList);
         }, 3000);
       } else {
         // Lost update occurs - B overwrites or both write
@@ -216,7 +200,7 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
         });
         setTimeout(() => {
           setSimState(prev => ({ ...prev, isActive: false }));
-          onConfirm(selectedSeats, overallTotalPrice, combosList);
+          onConfirm(selectedSeats, totalPrice, combosList);
         }, 4000);
       }
     }
@@ -289,7 +273,7 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
 
         setTimeout(() => {
           setSimState(prev => ({ ...prev, isActive: false }));
-          onConfirm(selectedSeats, overallTotalPrice, combosList);
+          onConfirm(selectedSeats, totalPrice, combosList);
         }, 3000);
 
       } else {
@@ -373,10 +357,9 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
         addSqlLog(`CLIENT: Transaction prepared. Proceeding to checkout.`, "success");
       }
       setSimState({ isActive: false, message: "", stage: 'idle' });
-      onConfirm(selectedSeats, overallTotalPrice, combosList);
+      onConfirm(selectedSeats, totalPrice, combosList);
     }
   };
-  const [showCombos, setShowCombos] = useState(false);
 
   const rows = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
   const cols = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -400,14 +383,7 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
     }, 0);
   }, [selectedSeats, basePrice]);
 
-  const comboPrice = useMemo(() => {
-    return Object.entries(selectedCombos).reduce((sum, [id, qty]) => {
-      const c = COMBOS.find(x => x.id === id);
-      return sum + (c ? c.price * qty : 0);
-    }, 0);
-  }, [selectedCombos]);
 
-  const overallTotalPrice = totalPrice + comboPrice;
 
   const toggleSeat = (key: string) => {
     if (isSeatLocked(showtime.id, key)) {
@@ -539,66 +515,7 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
             ))}
           </div>
 
-          {/* Combos Section (UML <<extend>> relationship) */}
-          <div className="mt-12 border-t border-zinc-800 pt-8">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex items-center justify-between hover:border-zinc-700 transition-all">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">🍿</span>
-                <div>
-                  <h4 className="text-white font-bold text-sm">Mua Thêm Combo Bắp & Nước? (Tùy Chọn)</h4>
-                  <p className="text-gray-400 text-[11px] mt-0.5">Tiết kiệm đến 20% khi mua online cùng vé xem phim</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCombos(!showCombos);
-                  if (showCombos) {
-                    setSelectedCombos({ solo: 0, double: 0, party: 0 });
-                  }
-                }}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
-                  showCombos 
-                    ? "bg-zinc-800 text-white border-zinc-700 hover:bg-zinc-750" 
-                    : "bg-red-600/10 text-red-400 border-red-650/20 hover:bg-red-600/20"
-                }`}
-              >
-                {showCombos ? "Hủy chọn" : "Chọn thêm"}
-              </button>
-            </div>
 
-            {showCombos && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                {COMBOS.map((c) => (
-                  <div key={c.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex items-center justify-between hover:border-zinc-700 transition-all">
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl">{c.icon}</span>
-                      <div>
-                        <h4 className="text-white font-bold text-sm">{c.name}</h4>
-                        <p className="text-gray-550 text-[11px] mt-0.5">{c.desc}</p>
-                        <p className="text-red-400 font-bold text-xs mt-2">{formatPrice(c.price)}đ</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                      <button
-                        onClick={() => setSelectedCombos(prev => ({ ...prev, [c.id]: Math.max(0, prev[c.id] - 1) }))}
-                        className="text-gray-400 hover:text-white p-1"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-white font-bold text-xs w-4 text-center">{selectedCombos[c.id]}</span>
-                      <button
-                        onClick={() => setSelectedCombos(prev => ({ ...prev, [c.id]: prev[c.id] + 1 }))}
-                        className="text-gray-400 hover:text-white p-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
         </div>
       </div>
@@ -621,7 +538,7 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-gray-400 text-sm">Tổng tiền:</span>
-                  <span className="text-white font-bold text-lg">{formatPrice(overallTotalPrice)}đ</span>
+                  <span className="text-white font-bold text-lg">{formatPrice(totalPrice)}đ</span>
                 </div>
               </>
             ) : (
@@ -648,13 +565,8 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
                   return;
                 }
 
-                const combosList = Object.entries(selectedCombos)
-                  .filter(([, qty]) => qty > 0)
-                  .map(([id, qty]) => {
-                    const c = COMBOS.find(x => x.id === id)!;
-                    return { name: c.name, quantity: qty, price: c.price };
-                  });
-                onConfirm(selectedSeats, overallTotalPrice, combosList);
+                const combosList: { name: string; quantity: number; price: number }[] = [];
+                onConfirm(selectedSeats, totalPrice, combosList);
               }
             }}
             disabled={selectedSeats.length === 0}

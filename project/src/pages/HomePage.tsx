@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Star, Clock, Play, Ticket, Gift, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Star, Clock, Play, Ticket } from "lucide-react";
 import { loadMovies } from "../lib/db";
 import type { Movie } from "../data/movies";
 import MovieCard from "../components/MovieCard";
@@ -162,49 +162,6 @@ function HeroSlider({ movies, onMovieClick }: { movies: Movie[]; onMovieClick: (
   );
 }
 
-function PromoBanner() {
-  const promos = [
-    {
-      icon: <Ticket className="w-5 h-5 text-red-500" />,
-      title: "Thứ 4 Hàng Tuần",
-      desc: "Giảm 30% giá vé tất cả suất chiếu",
-      color: "from-red-950/60 to-zinc-900",
-    },
-    {
-      icon: <Gift className="w-5 h-5 text-amber-500" />,
-      title: "Combo Bắp Nước",
-      desc: "Combo 2 giảm 20% khi mua online",
-      color: "from-amber-950/60 to-zinc-900",
-    },
-    {
-      icon: <Zap className="w-5 h-5 text-blue-500" />,
-      title: "Thẻ Thành Viên",
-      desc: "Tích điểm đổi vé xem phim miễn phí",
-      color: "from-blue-950/60 to-zinc-900",
-    },
-  ];
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {promos.map((p, i) => (
-          <div
-            key={i}
-            className={`bg-gradient-to-r ${p.color} rounded-xl p-4 border border-white/5 flex items-center gap-4 hover:border-white/10 transition-all cursor-pointer group`}
-          >
-            <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-              {p.icon}
-            </div>
-            <div>
-              <p className="text-white font-semibold text-sm">{p.title}</p>
-              <p className="text-gray-400 text-xs mt-0.5">{p.desc}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function HomePage({ onMovieClick, showComingSoon = false, searchQuery = "" }: HomePageProps) {
   const [activeTab, setActiveTab] = useState<"now_showing" | "coming_soon">(
@@ -232,7 +189,6 @@ export default function HomePage({ onMovieClick, showComingSoon = false, searchQ
   return (
     <div className="min-h-screen bg-zinc-950">
       <HeroSlider movies={moviesList} onMovieClick={onMovieClick} />
-      <PromoBanner />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
         {/* Tabs */}

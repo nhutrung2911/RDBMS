@@ -1,0 +1,11 @@
+USE cinema_db;
+GO
+
+IF OBJECT_ID('Customer', 'U') IS NOT NULL DROP TABLE Customer;
+CREATE TABLE Customer (
+    CustomerId INT IDENTITY(1,1) PRIMARY KEY,
+    FullName NVARCHAR(100) NOT NULL,
+    Phone VARCHAR(15) UNIQUE,
+    Email VARCHAR(100) UNIQUE
+);
+GO

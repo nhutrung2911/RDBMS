@@ -16,7 +16,7 @@ import { Ticket } from "lucide-react";
 import DevPanel from "./components/DevPanel";
 import type { ConcurrencyConfig, SqlLog } from "./components/DevPanel";
 
-type Page = "home" | "coming_soon" | "movie_detail" | "seats" | "booking_confirm" | "promotions" | "my_tickets" | "auth" | "profile" | "admin";
+type Page = "home" | "coming_soon" | "movie_detail" | "seats" | "booking_confirm" | "my_tickets" | "auth" | "profile" | "admin";
 
 export default function App() {
   const [page, setPage] = useState<Page>("home");
@@ -105,7 +105,7 @@ export default function App() {
 
   const navigate = (target: string) => {
     if (
-      target === "home" || target === "coming_soon" || target === "promotions" || 
+      target === "home" || target === "coming_soon" || 
       target === "my_tickets" || target === "auth" || target === "profile" || target === "admin"
     ) {
       setPage(target as Page);
@@ -154,7 +154,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const showFooter = page === "home" || page === "coming_soon" || page === "promotions" || page === "my_tickets";
+  const showFooter = page === "home" || page === "coming_soon" || page === "my_tickets";
 
   if (loading) {
     return (
@@ -235,8 +235,6 @@ export default function App() {
             searchQuery={searchQuery}
           />
         )}
-
-        {page === "promotions" && <PromotionsPage onHome={() => navigate("home")} />}
         
         {page === "my_tickets" && (
           <MyTicketsPage 
@@ -300,84 +298,6 @@ export default function App() {
   );
 }
 
-function PromotionsPage({ onHome }: { onHome: () => void }) {
-  const promos = [
-    {
-      title: "Thứ 4 Vui Vẻ",
-      desc: "Giảm 30% tất cả suất chiếu mọi ngày thứ 4 hàng tuần. Áp dụng cho tất cả thành viên.",
-      tag: "HOT",
-      tagColor: "bg-red-600",
-      image: "https://images.pexels.com/photos/7991486/pexels-photo-7991486.jpeg?auto=compress&cs=tinysrgb&w=600&h=300&dpr=1",
-      expires: "31/12/2026",
-    },
-    {
-      title: "Combo Bắp Nước Đôi",
-      desc: "Mua 1 combo bắp + 2 nước giảm 20% khi đặt vé online. Không giới hạn số lần sử dụng.",
-      tag: "MỚI",
-      tagColor: "bg-amber-500",
-      image: "https://images.pexels.com/photos/3662845/pexels-photo-3662845.jpeg?auto=compress&cs=tinysrgb&w=600&h=300&dpr=1",
-      expires: "30/06/2026",
-    },
-    {
-      title: "Sinh Nhật Vàng",
-      desc: "Tặng 1 vé miễn phí vào ngày sinh nhật của bạn. Áp dụng cho thành viên đã xác minh.",
-      tag: "ĐẶC BIỆT",
-      tagColor: "bg-yellow-600",
-      image: "https://images.pexels.com/photos/7234213/pexels-photo-7234213.jpeg?auto=compress&cs=tinysrgb&w=600&h=300&dpr=1",
-      expires: "31/12/2026",
-    },
-    {
-      title: "Thẻ Thành Viên Premium",
-      desc: "Đăng ký thẻ thành viên Premium, tích điểm nhân đôi và ưu tiên đặt vé trước 7 ngày.",
-      tag: "PREMIUM",
-      tagColor: "bg-purple-600",
-      image: "https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=600&h=300&dpr=1",
-      expires: "Không giới hạn",
-    },
-  ];
-
-  return (
-    <div className="min-h-screen bg-zinc-950 pt-24 pb-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <span className="w-1 h-7 bg-red-500 rounded-full" />
-            Khuyến Mãi
-          </h1>
-          <button 
-            onClick={onHome}
-            className="text-gray-400 hover:text-white text-sm font-medium transition-colors"
-          >
-            Quay lại trang chủ
-          </button>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {promos.map((p, i) => (
-            <div key={i} className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 hover:border-zinc-600 transition-all group">
-              <div className="relative h-44 overflow-hidden">
-                <img src={p.image} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent" />
-                <span className={`absolute top-3 left-3 ${p.tagColor} text-white text-xs font-bold px-2.5 py-1 rounded`}>
-                  {p.tag}
-                </span>
-              </div>
-              <div className="p-5">
-                <h3 className="text-white font-bold text-lg mb-2">{p.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed mb-4">{p.desc}</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600 text-xs">HSD: {p.expires}</span>
-                  <button className="bg-red-600 hover:bg-red-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-                    Xem Thêm
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function MyTicketsPage({ userEmail, onHome, onAuth }: { userEmail: string | null; onHome: () => void; onAuth: () => void }) {
   const [tickets, setTickets] = useState<BookedTicket[]>([]);

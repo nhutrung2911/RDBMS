@@ -1,0 +1,11 @@
+USE cinema_db;
+GO
+
+IF OBJECT_ID('Cinema', 'U') IS NOT NULL DROP TABLE Cinema;
+CREATE TABLE Cinema (
+    CinemaId INT IDENTITY(1,1) PRIMARY KEY,
+    CinemaName NVARCHAR(100) NOT NULL UNIQUE,
+    [Address] NVARCHAR(250),
+    City NVARCHAR(100)
+);
+GO
