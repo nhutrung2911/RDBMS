@@ -59,6 +59,16 @@ function createMockSupabase() {
         }
       },
       {
+        id: 'user-customer2',
+        email: 'trankhachhang@gmail.com',
+        password: 'password123',
+        fullName: 'Trần Khách Hàng',
+        user_metadata: {
+          full_name: 'Trần Khách Hàng',
+          role: 'customer'
+        }
+      },
+      {
         id: 'user-admin',
         email: 'admin@gmail.com',
         password: 'password123',
@@ -71,6 +81,27 @@ function createMockSupabase() {
     ];
 
     let modified = false;
+
+    // Remove legacy 'user-staff' / 'staff@gmail.com' account if it exists in client storage
+    const legacyStaffIndex = users.findIndex((u: any) => u.id === 'user-staff' || u.email === 'staff@gmail.com');
+    if (legacyStaffIndex !== -1) {
+      users.splice(legacyStaffIndex, 1);
+      modified = true;
+    }
+
+    // Also clear active session if logged in as legacy staff
+    try {
+      const activeUserStr = localStorage.getItem('mock_supabase_session');
+      if (activeUserStr) {
+        const activeUser = JSON.parse(activeUserStr);
+        if (activeUser.id === 'user-staff' || activeUser.email === 'staff@gmail.com') {
+          localStorage.removeItem('mock_supabase_session');
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to clean up legacy staff session", e);
+    }
+
     defaultAccounts.forEach(acc => {
       const idx = users.findIndex((u: any) => u.email === acc.email);
       if (idx === -1) {

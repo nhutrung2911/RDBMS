@@ -100,7 +100,7 @@ export default function Navbar({ onNavigate, currentPage, userEmail, userRole, o
               )}
             </div>
 
-            {/* Admin Portal (Admin and Staff only) */}
+            {/* Admin Portal (Admin only) */}
             {showAdminLink && (
               <button
                 onClick={() => onNavigate("admin")}

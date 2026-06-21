@@ -1241,7 +1241,7 @@ export default function AdminPortalPage({
             </div>
           )}
 
-          {/* TICKET SCANNER & STAFF VIEW */}
+          {/* TICKET SCANNER & CHECK-IN VIEW */}
           {activeTab === "tickets" && (
             <div className="space-y-6">
               <h1 className="text-2xl font-bold text-white">Soát Vé & Giao Dịch</h1>
@@ -2317,7 +2317,7 @@ export default function AdminPortalPage({
                   <span>{printedTicket.bookedAt}</span>
                 </div>
                 <div className="flex justify-between text-[9px] text-zinc-500">
-                  <span>Nhân viên / Staff:</span>
+                  <span>Người bán / Cashier:</span>
                   <span>nguyennhutrung788@gmail.com</span>
                 </div>
               </div>
