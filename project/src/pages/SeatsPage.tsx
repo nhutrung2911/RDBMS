@@ -3,7 +3,7 @@ import { ArrowLeft, Monitor, ChevronRight, CheckCircle2, ShieldAlert, AlertTrian
 import type { Movie, Showtime } from "../data/movies";
 import { cinemas, TICKET_PRICES } from "../data/movies";
 import { 
-  loadSeatLocks, loadTickets, isSeatLocked, addSeatLock, removeSeatLock
+  loadSeatLocks, loadTickets, isSeatLocked, addSeatLock, removeSeatLock, loadRooms, loadSeatPricing
 } from "../lib/db";
 
 interface SeatsPageProps {
@@ -21,9 +21,11 @@ interface SeatsPageProps {
 
 type SeatStatus = "available" | "selected" | "sold" | "vip" | "vip_selected" | "couple" | "couple_selected";
 
-function generateSeats() {
-  const rows = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
-  const cols = 12;
+function generateSeats(matchingRoom?: any) {
+  const rows = matchingRoom 
+    ? Array.from({ length: matchingRoom.rows }, (_, i) => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[i])
+    : ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+  const cols = matchingRoom ? matchingRoom.cols : 12;
   const soldPositions = new Set([
     "A3", "A4", "B7", "B8", "C2", "C5", "C6", "D10", "D11",
     "E1", "E2", "F4", "F5", "F6", "G8", "G9", "H3", "I7", "J2", "J3",
@@ -37,6 +39,9 @@ function generateSeats() {
       const key = `${row}${col}`;
       if (soldPositions.has(key)) {
         seats[key] = "sold";
+      } else if (matchingRoom) {
+        const type = matchingRoom.seats?.[key] || "standard";
+        seats[key] = type === "standard" ? "available" : (type as SeatStatus);
       } else if (row === coupleRow) {
         seats[key] = col % 2 === 1 ? "couple" : "couple";
       } else if (vipRows.has(row)) {
@@ -54,7 +59,15 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurrencyConfig, addSqlLog }: SeatsPageProps) {
-  const [seatMap, setSeatMap] = useState<Record<string, SeatStatus>>(generateSeats);
+  const matchingRoom = useMemo(() => {
+    return loadRooms().find(r => r.name === showtime.hall && r.cinemaId === showtime.cinemaId);
+  }, [showtime.hall, showtime.cinemaId]);
+
+  const pricingConfig = useMemo(() => {
+    return loadSeatPricing();
+  }, []);
+
+  const [seatMap, setSeatMap] = useState<Record<string, SeatStatus>>(() => generateSeats(matchingRoom));
   const [simState, setSimState] = useState<{
     isActive: boolean;
     message: string;
@@ -74,32 +87,41 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
     const soldFromTickets = new Set<string>();
     tickets.forEach(t => t.seats.forEach(s => soldFromTickets.add(s)));
     
-    setSeatMap(prev => {
-      const next = { ...prev };
-      // 1. Mark sold from tickets
-      soldFromTickets.forEach(s => {
-        next[s] = "sold";
-      });
-      
-      // 2. Handle pending locks based on Dirty Read config
-      locks.forEach(l => {
-        if (l.status === 'sold') {
-          next[l.seatId] = "sold";
-        } else if (l.status === 'pending') {
-          if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === 'dirty_read') {
-            if (concurrencyConfig.isolationLevel === 'READ_UNCOMMITTED') {
-              next[l.seatId] = "sold"; 
-            } else {
-              next[l.seatId] = l.seatId.startsWith("J") ? "couple" : ["F","G","H"].includes(l.seatId[0]) ? "vip" : "available";
-            }
-          } else {
-            next[l.seatId] = "sold";
-          }
-        }
-      });
-      return next;
+    // Re-initialize seats map from current matching room configuration
+    const freshMap = generateSeats(matchingRoom);
+    
+    // Merge database changes into the fresh seat map
+    const next = { ...freshMap };
+    // 1. Mark sold from tickets
+    soldFromTickets.forEach(s => {
+      next[s] = "sold";
     });
-  }, [showtime.id, concurrencyConfig]);
+    
+    // 2. Handle pending locks based on Dirty Read config
+    locks.forEach(l => {
+      if (l.status === 'sold') {
+        next[l.seatId] = "sold";
+      } else if (l.status === 'pending') {
+        if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === 'dirty_read') {
+          if (concurrencyConfig.isolationLevel === 'READ_UNCOMMITTED') {
+            next[l.seatId] = "sold"; 
+          } else {
+            let defaultType: SeatStatus = "available";
+            if (matchingRoom) {
+              const type = matchingRoom.seats?.[l.seatId] || "standard";
+              defaultType = type === "standard" ? "available" : (type as SeatStatus);
+            } else {
+              defaultType = l.seatId.startsWith("J") ? "couple" : ["F","G","H"].includes(l.seatId[0]) ? "vip" : "available";
+            }
+            next[l.seatId] = defaultType;
+          }
+        } else {
+          next[l.seatId] = "sold";
+        }
+      }
+    });
+    setSeatMap(next);
+  }, [showtime.id, concurrencyConfig, matchingRoom]);
 
   const handleProceedWithSimulation = async () => {
     if (selectedSeats.length === 0) return;
