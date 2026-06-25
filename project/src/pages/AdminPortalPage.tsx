@@ -669,7 +669,7 @@ export default function AdminPortalPage({
       saveMovies(updated);
     } else {
       // Add
-      const newId = moviesList.length > 0 ? Math.max(...moviesList.map(m => m.id)) + 1 : 1;
+      const newId = moviesList.length > 0 ? Math.max(1000, ...moviesList.map(m => m.id)) + 1 : 1000;
       const newMovie = {
         ...movieForm,
         id: newId,
@@ -738,7 +738,7 @@ export default function AdminPortalPage({
       return;
     }
 
-    const newId = showtimesList.length > 0 ? Math.max(...showtimesList.map(s => s.id)) + 1 : 1;
+    const newId = showtimesList.length > 0 ? Math.max(1000, ...showtimesList.map(s => s.id)) + 1 : 1000;
     newShowtime.id = newId;
 
     saveShowtimes([...showtimesList, newShowtime]);

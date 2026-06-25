@@ -34,9 +34,19 @@ export function initializeDB() {
   if (!localStorage.getItem("movies_db")) {
     localStorage.setItem("movies_db", JSON.stringify(staticMovies));
   } else {
-    // Sync movie release dates for cached database
+    // Sync movie release dates and merge any newly added static movies (with self-healing for ID collisions)
     try {
-      const storedMovies = JSON.parse(localStorage.getItem("movies_db") || "[]");
+      let storedMovies = JSON.parse(localStorage.getItem("movies_db") || "[]") as Movie[];
+      
+      // Filter out stored movies with IDs <= 8 that don't match the title of the static movie (collisions)
+      storedMovies = storedMovies.filter((m) => {
+        const staticM = staticMovies.find((sm) => sm.id === m.id);
+        if (staticM) {
+          return staticM.title === m.title;
+        }
+        return true;
+      });
+
       const updatedMovies = storedMovies.map((m: any) => {
         const staticMovie = staticMovies.find((sm) => sm.id === m.id);
         if (staticMovie) {
@@ -44,19 +54,32 @@ export function initializeDB() {
         }
         return m;
       });
-      localStorage.setItem("movies_db", JSON.stringify(updatedMovies));
+      const missingStaticMovies = staticMovies.filter(
+        (sm) => !storedMovies.some((m) => m.id === sm.id)
+      );
+      localStorage.setItem("movies_db", JSON.stringify([...updatedMovies, ...missingStaticMovies]));
     } catch (e) {
       localStorage.setItem("movies_db", JSON.stringify(staticMovies));
     }
   }
 
-  // Always sync showtime dates with dynamic dates (day0, day1, day2)
+  // Always sync showtime dates with dynamic dates (day0, day1, day2) and merge missing static showtimes (with self-healing for ID collisions)
   let showtimes = staticShowtimes;
   const storedShowtimesStr = localStorage.getItem("showtimes_db");
   if (storedShowtimesStr) {
     try {
-      const parsed = JSON.parse(storedShowtimesStr);
-      showtimes = parsed.map((s: any) => {
+      let parsed = JSON.parse(storedShowtimesStr) as Showtime[];
+      
+      // Filter out parsed showtimes with IDs <= 17 that don't match the static showtime's movieId (collisions)
+      parsed = parsed.filter((s) => {
+        const staticSt = staticShowtimes.find((st) => st.id === s.id);
+        if (staticSt) {
+          return staticSt.movieId === s.movieId;
+        }
+        return true;
+      });
+
+      const updatedExisting = parsed.map((s: any) => {
         const staticSt = staticShowtimes.find((st) => st.id === s.id);
         if (staticSt) {
           return {
@@ -70,6 +93,10 @@ export function initializeDB() {
           };
         }
       });
+      const missingStatic = staticShowtimes.filter(
+        (st) => !parsed.some((s) => s.id === st.id)
+      );
+      showtimes = [...updatedExisting, ...missingStatic];
     } catch {
       showtimes = staticShowtimes;
     }
