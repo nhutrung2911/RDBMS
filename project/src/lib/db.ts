@@ -281,7 +281,7 @@ export function loadRooms(): RoomConfig[] {
   const rowsCount = 10;
   const colsCount = 12;
 
-  defaultHallsByCinema.forEach((item, cIdx) => {
+  defaultHallsByCinema.forEach((item) => {
     item.halls.forEach((hallName, hIdx) => {
       const seatsMap: Record<string, 'standard' | 'vip' | 'couple'> = {};
       for (let r = 0; r < rowsCount; r++) {
