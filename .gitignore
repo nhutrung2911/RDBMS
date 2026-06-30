@@ -40,3 +40,6 @@ scratch/
 chuong1_2_text.txt
 *.docx
 *.pdf
+.vs/
+**/.vs/
+

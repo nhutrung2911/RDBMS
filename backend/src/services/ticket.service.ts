@@ -48,21 +48,55 @@ export class TicketService {
     const pool = await connectDatabase();
     if (!pool) return mockTickets;
 
-    const result = await pool.request().query("SELECT * FROM Ticket ORDER BY BookedAt DESC");
+    const result = await pool.request().query(`
+      SELECT 
+          t.TicketId AS TicketID,
+          sh.MovieId AS MovieID,
+          m.Title AS MovieTitle,
+          m.Poster AS MoviePoster,
+          c.CinemaName AS CinemaName,
+          CONVERT(VARCHAR(10), sh.StartTime, 23) AS ShowtimeDate,
+          CONVERT(VARCHAR(5), sh.StartTime, 108) AS ShowtimeTime,
+          r.RoomName AS Hall,
+          (
+              SELECT SeatNumber + ','
+              FROM TicketDetail td2
+              JOIN Seat s2 ON td2.SeatId = s2.SeatId
+              WHERE td2.TicketId = t.TicketId
+              FOR XML PATH('')
+          ) AS SeatsString,
+          t.TotalPrice AS TotalPrice,
+          t.PaymentMethod AS PaymentMethod,
+          CONVERT(VARCHAR(16), t.BookingTime, 120) AS BookedAt,
+          t.Status AS Status,
+          t.UserEmail AS UserEmail
+      FROM Ticket t
+      LEFT JOIN TicketDetail td ON t.TicketId = td.TicketId
+      LEFT JOIN Showtime sh ON td.ShowtimeId = sh.ShowtimeId
+      LEFT JOIN Room r ON sh.RoomId = r.RoomId
+      LEFT JOIN Cinema c ON r.CinemaId = c.CinemaId
+      LEFT JOIN Movie m ON sh.MovieId = m.MovieId
+      GROUP BY 
+          t.TicketId, sh.MovieId, m.Title, m.Poster, c.CinemaName, 
+          sh.StartTime, r.RoomName, t.TotalPrice, t.PaymentMethod, 
+          t.BookingTime, t.Status, t.UserEmail
+      ORDER BY t.BookingTime DESC
+    `);
+    
     return result.recordset.map(row => ({
       id: row.TicketID,
-      movieId: row.MovieID,
-      movieTitle: row.MovieTitle,
-      moviePoster: row.MoviePoster,
-      cinemaName: row.CinemaName,
-      showtimeDate: row.ShowtimeDate,
-      showtimeTime: row.ShowtimeTime,
-      hall: row.Hall,
-      seats: JSON.parse(row.Seats || "[]"),
+      movieId: row.MovieID || 1,
+      movieTitle: row.MovieTitle || "Unknown Movie",
+      moviePoster: row.MoviePoster || "",
+      cinemaName: row.CinemaName || "",
+      showtimeDate: row.ShowtimeDate || "",
+      showtimeTime: row.ShowtimeTime || "",
+      hall: row.Hall || "",
+      seats: row.SeatsString ? row.SeatsString.split(',').filter(Boolean) : [],
       totalPrice: row.TotalPrice,
       paymentMethod: row.PaymentMethod,
       bookedAt: row.BookedAt,
-      status: row.Status,
+      status: row.Status === 'valid' ? 'valid' : 'used',
       userEmail: row.UserEmail
     }));
   }
@@ -75,8 +109,40 @@ export class TicketService {
     const pool = await connectDatabase();
     if (!pool) return mockShowtimes;
 
-    const result = await pool.request().query("SELECT * FROM Showtime");
-    return result.recordset;
+    const result = await pool.request().query(`
+      SELECT 
+        st.ShowtimeId, st.MovieId, st.RoomId, st.StartTime, st.EndTime, st.Price,
+        r.RoomName, r.CinemaId, r.Capacity,
+        (SELECT COUNT(*) FROM Seat WHERE RoomId = st.RoomId) as TotalSeats,
+        (
+          (SELECT COUNT(*) FROM Seat WHERE RoomId = st.RoomId) - 
+          (SELECT COUNT(*) FROM TicketDetail td JOIN Ticket t ON td.TicketId = t.TicketId WHERE td.ShowtimeId = st.ShowtimeId AND t.Status != N'canceled')
+        ) as AvailableSeats
+      FROM Showtime st
+      JOIN Room r ON st.RoomId = r.RoomId
+    `);
+
+    return result.recordset.map(row => {
+      // Handle local timezone offset to avoid date shifting
+      const startTime = new Date(row.StartTime);
+      const year = startTime.getFullYear();
+      const month = String(startTime.getMonth() + 1).padStart(2, '0');
+      const day = String(startTime.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      const timeStr = String(startTime.getHours()).padStart(2, '0') + ":" + String(startTime.getMinutes()).padStart(2, '0');
+      
+      return {
+        id: row.ShowtimeId,
+        movieId: row.MovieId,
+        cinemaId: row.CinemaId,
+        date: dateStr,
+        time: timeStr,
+        hall: row.RoomName,
+        type: row.Price >= 150000 ? "4dx" : row.Price >= 130000 ? "imax" : "standard",
+        availableSeats: row.AvailableSeats < 0 ? 0 : row.AvailableSeats,
+        totalSeats: row.TotalSeats || 120
+      };
+    });
   }
 
   async createShowtime(st: any): Promise<any> {
@@ -89,21 +155,55 @@ export class TicketService {
     const pool = await connectDatabase();
     if (!pool) return null;
 
+    // Get Movie Duration to calculate EndTime
+    const movieRes = await pool.request()
+      .input("movieId", sql.Int, st.movieId)
+      .query("SELECT Duration FROM Movie WHERE MovieId = @movieId");
+    const duration = movieRes.recordset[0]?.Duration || 120; // fallback to 120 mins
+
+    const startTimeStr = `${st.date} ${st.time}:00`;
+    const startDate = new Date(startTimeStr);
+    const endDate = new Date(startDate.getTime() + duration * 60000);
+
+    // Get RoomId from CinemaId and RoomName (st.hall)
+    const roomRes = await pool.request()
+      .input("cinemaId", sql.Int, st.cinemaId)
+      .input("roomName", sql.VarChar, st.hall)
+      .query("SELECT RoomId FROM Room WHERE CinemaId = @cinemaId AND RoomName = @roomName");
+    let roomId = roomRes.recordset[0]?.RoomId;
+    if (!roomId) {
+      const fallbackRoom = await pool.request()
+        .input("cinemaId", sql.Int, st.cinemaId)
+        .query("SELECT TOP 1 RoomId FROM Room WHERE CinemaId = @cinemaId");
+      roomId = fallbackRoom.recordset[0]?.RoomId || 1;
+    }
+
+    const price = st.price || 90000.00;
+
     const result = await pool.request()
       .input("movieId", sql.Int, st.movieId)
-      .input("cinemaId", sql.Int, st.cinemaId)
-      .input("date", sql.VarChar, st.date)
-      .input("time", sql.VarChar, st.time)
-      .input("hall", sql.VarChar, st.hall)
-      .input("type", sql.VarChar, st.type)
-      .input("availableSeats", sql.Int, st.availableSeats)
-      .input("totalSeats", sql.Int, st.totalSeats)
+      .input("roomId", sql.Int, roomId)
+      .input("startTime", sql.DateTime, startDate)
+      .input("endTime", sql.DateTime, endDate)
+      .input("price", sql.Decimal(18, 2), price)
       .query(`
-        INSERT INTO Showtime (MovieID, CinemaID, Date, Time, Hall, Type, AvailableSeats, TotalSeats)
+        INSERT INTO Showtime (MovieId, RoomId, StartTime, EndTime, Price)
         OUTPUT INSERTED.*
-        VALUES (@movieId, @cinemaId, @date, @time, @hall, @type, @availableSeats, @totalSeats)
+        VALUES (@movieId, @roomId, @startTime, @endTime, @price)
       `);
-    return result.recordset[0];
+
+    const inserted = result.recordset[0];
+    return {
+      id: inserted.ShowtimeId,
+      movieId: inserted.MovieId,
+      cinemaId: st.cinemaId,
+      date: st.date,
+      time: st.time,
+      hall: st.hall,
+      type: st.type,
+      availableSeats: st.availableSeats,
+      totalSeats: st.totalSeats
+    };
   }
 
   async deleteShowtime(id: number): Promise<boolean> {
@@ -151,7 +251,7 @@ export class TicketService {
   async addLock(showtimeId: number, seatId: string, transactionId: string, status: "pending" | "sold" = "pending", durationMs = 600000): Promise<SeatLock> {
     const now = Date.now();
     mockSeatLocks = mockSeatLocks.filter(l => !(l.showtimeId === showtimeId && l.seatId === seatId));
-    
+
     const newLock: SeatLock = {
       id: Math.random().toString(36).substring(2, 9),
       showtimeId,
@@ -190,9 +290,9 @@ export class TicketService {
     paymentMethod: string;
     combos?: any[];
   }): Promise<BookedTicket> {
-    const { 
-      showtimeId, seats, useLockFix, latencyMs, isolationLevel, 
-      userEmail, movieTitle, moviePoster, cinemaName, showtimeDate, showtimeTime, totalPrice, paymentMethod, combos 
+    const {
+      showtimeId, seats, useLockFix, latencyMs, isolationLevel,
+      userEmail, movieTitle, moviePoster, cinemaName, showtimeDate, showtimeTime, totalPrice, paymentMethod, combos
     } = params;
 
     const transactionId = "TX_" + Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -207,9 +307,9 @@ export class TicketService {
       }
 
       // Check if any seat is already booked
-      const alreadyBooked = mockTickets.some(t => 
-        t.showtimeTime === showtimeTime && 
-        t.showtimeDate === showtimeDate && 
+      const alreadyBooked = mockTickets.some(t =>
+        t.showtimeTime === showtimeTime &&
+        t.showtimeDate === showtimeDate &&
         t.seats.some(s => seats.includes(s))
       );
 
@@ -236,7 +336,7 @@ export class TicketService {
       };
 
       mockTickets.unshift(ticket);
-      
+
       // Update showtime seats
       const showtimeObj = mockShowtimes.find(s => s.id === showtimeId);
       if (showtimeObj) {
@@ -258,20 +358,29 @@ export class TicketService {
     await transaction.begin(isolationLevel);
 
     try {
-      // Check for seats locks/availability using query statements with UPDLOCK/HOLDLOCK depending on fix configuration
+      // Check for seats locks/availability using query statements with UPDLOCK/HOLDLOCK on physical Seat table
       const lockHint = useLockFix ? "WITH (UPDLOCK, HOLDLOCK)" : "";
 
       // DEADLOCK prevention: If fix is enabled, sort the seats list alphabetically
       const orderedSeats = useLockFix ? [...seats].sort() : seats;
 
       for (const seat of orderedSeats) {
-        // Query to check if the seat status is sold
+        // Step 2.1: Lock the static physical seat row first
+        await transaction.request()
+          .input("showtimeId", sql.Int, showtimeId)
+          .input("seatNumber", sql.VarChar, seat)
+          .query(`
+            SELECT SeatId FROM Seat ${lockHint} 
+            WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId)
+          `);
+
+        // Step 2.2: Query the view to check if it's already sold (No hint on the complex view)
         const seatCheck = await transaction.request()
           .input("showtimeId", sql.Int, showtimeId)
-          .input("seatId", sql.VarChar, seat)
+          .input("seatNumber", sql.VarChar, seat)
           .query(`
-            SELECT Status FROM Seat ${lockHint} 
-            WHERE SeatID = @seatId AND ShowtimeID = @showtimeId
+            SELECT Status FROM v_ShowtimeSeats 
+            WHERE SeatNumber = @seatNumber AND ShowtimeId = @showtimeId
           `);
 
         const seatStatus = seatCheck.recordset[0]?.Status;
@@ -285,38 +394,38 @@ export class TicketService {
         await new Promise(resolve => setTimeout(resolve, latencyMs));
       }
 
-      // Perform Updates to set seats status to sold
-      for (const seat of seats) {
-        await transaction.request()
-          .input("showtimeId", sql.Int, showtimeId)
-          .input("seatId", sql.VarChar, seat)
-          .query(`
-            UPDATE Seat SET Status = 'SOLD' 
-            WHERE SeatID = @seatId AND ShowtimeID = @showtimeId
-          `);
-      }
-
-      // Insert Ticket invoice
+      // Insert Ticket invoice into database (using matching physical schema)
       const ticketId = "CNS" + Math.random().toString(36).substring(2, 7).toUpperCase();
+      // Default to customer ID 1 or a lookup
       await transaction.request()
         .input("ticketId", sql.VarChar, ticketId)
-        .input("movieId", sql.Int, 1) // default mapped id
-        .input("movieTitle", sql.NVarChar, movieTitle)
-        .input("moviePoster", sql.VarChar, moviePoster)
-        .input("cinemaName", sql.NVarChar, cinemaName)
-        .input("showtimeDate", sql.VarChar, showtimeDate)
-        .input("showtimeTime", sql.VarChar, showtimeTime)
-        .input("hall", sql.VarChar, "Hall 1")
-        .input("seatsJson", sql.VarChar, JSON.stringify(seats))
-        .input("totalPrice", sql.Int, totalPrice)
+        .input("customerId", sql.Int, 1) // default customer ID
+        .input("totalPrice", sql.Decimal(18,2), totalPrice)
         .input("paymentMethod", sql.NVarChar, paymentMethod)
-        .input("bookedAt", sql.VarChar, new Date().toISOString().replace("T", " ").substring(0, 16))
-        .input("status", sql.VarChar, "valid")
         .input("userEmail", sql.VarChar, userEmail)
         .query(`
-          INSERT INTO Ticket (TicketID, MovieID, MovieTitle, MoviePoster, CinemaName, ShowtimeDate, ShowtimeTime, Hall, Seats, TotalPrice, PaymentMethod, BookedAt, Status, UserEmail)
-          VALUES (@ticketId, @movieId, @movieTitle, @moviePoster, @cinemaName, @showtimeDate, @showtimeTime, @hall, @seatsJson, @totalPrice, @paymentMethod, @bookedAt, @status, @userEmail)
+          INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status)
+          VALUES (@ticketId, @customerId, GETDATE(), @totalPrice, @paymentMethod, @userEmail, N'valid')
         `);
+
+      // Insert seat tickets into TicketDetail (instead of trying to UPDATE Seat Status)
+      const pricePerSeat = totalPrice / seats.length;
+      for (const seat of seats) {
+        await transaction.request()
+          .input("ticketId", sql.VarChar, ticketId)
+          .input("showtimeId", sql.Int, showtimeId)
+          .input("seatNumber", sql.VarChar, seat)
+          .input("price", sql.Decimal(18,2), pricePerSeat)
+          .query(`
+            INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)
+            VALUES (
+              @ticketId, 
+              @showtimeId, 
+              (SELECT SeatId FROM Seat WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId)), 
+              @price
+            )
+          `);
+      }
 
       // Update showtime seats counter
       await transaction.request()
@@ -324,7 +433,7 @@ export class TicketService {
         .input("seatCount", sql.Int, seats.length)
         .query(`
           UPDATE Showtime 
-          SET AvailableSeats = CASE WHEN AvailableSeats >= @seatCount THEN AvailableSeats - @seatCount ELSE 0 END 
+          SET Price = Price -- No AvailableSeats column in Showtime table, so this is a placeholder or safe operation
           WHERE ShowtimeID = @showtimeId
         `);
 
@@ -350,7 +459,11 @@ export class TicketService {
 
       return ticket;
     } catch (err) {
-      await transaction.rollback();
+      try {
+        await transaction.rollback();
+      } catch (rollbackErr) {
+        // Suppress warning if transaction was already aborted/rolled back by SQL Server
+      }
       throw err;
     }
   }

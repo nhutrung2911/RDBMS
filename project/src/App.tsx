@@ -10,7 +10,7 @@ import UserProfilePage from "./pages/UserProfilePage";
 import AdminPortalPage from "./pages/AdminPortalPage";
 import type { Movie, Showtime } from "./data/movies";
 import { supabase } from "./lib/supabase";
-import { loadTickets } from "./lib/db";
+import { loadTickets, syncWithBackend } from "./lib/db";
 import type { BookedTicket } from "./lib/db";
 import { Ticket } from "lucide-react";
 import DevPanel from "./components/DevPanel";
@@ -56,6 +56,10 @@ export default function App() {
       return next;
     });
   };
+
+  useEffect(() => {
+    syncWithBackend();
+  }, [page]);
 
   useEffect(() => {
     let subscription: any = null;
@@ -257,6 +261,7 @@ export default function App() {
           <SeatsPage
             movie={selectedMovie}
             showtime={selectedShowtime}
+            userEmail={userEmail}
             onBack={() => {
               setPage("movie_detail");
               window.scrollTo({ top: 0 });

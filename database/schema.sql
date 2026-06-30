@@ -93,18 +93,24 @@ GO
 
 -- 10. Tạo Khung nhìn (View) để tra cứu trạng thái ghế ngồi theo thời gian thực của suất chiếu
 -- Giúp Backend kiểm tra trạng thái ghế 'AVAILABLE' hoặc 'SOLD' dễ dàng mà không làm thay đổi luồng xử lý chính
-CREATE VIEW v_ShowtimeSeats AS
+CREATE VIEW v_ShowtimeSeats AS 
 SELECT 
-    sh.ShowtimeId,
+    st.ShowtimeId,
+    st.MovieId,
+    m.Title AS MovieTitle,
+    st.RoomId,
+    r.RoomName,
     s.SeatId,
     s.SeatNumber,
     s.SeatType,
     CASE 
-        WHEN td.TicketDetailId IS NOT NULL AND t.Status != N'canceled' THEN 'SOLD'
-        ELSE 'AVAILABLE'
-    END AS Status
-FROM Showtime sh
-INNER JOIN Seat s ON sh.RoomId = s.RoomId
-LEFT JOIN TicketDetail td ON sh.ShowtimeId = td.ShowtimeId AND s.SeatId = td.SeatId
+        WHEN td.TicketDetailId IS NOT NULL AND t.Status != N'canceled' THEN N'SOLD'
+        ELSE N'AVAILABLE'
+    END AS Status 
+FROM Showtime st 
+JOIN Room r ON st.RoomId = r.RoomId 
+JOIN Seat s ON r.RoomId = s.RoomId 
+JOIN Movie m ON st.MovieId = m.MovieId 
+LEFT JOIN TicketDetail td ON st.ShowtimeId = td.ShowtimeId AND s.SeatId = td.SeatId 
 LEFT JOIN Ticket t ON td.TicketId = t.TicketId;
 GO

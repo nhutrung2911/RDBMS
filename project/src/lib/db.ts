@@ -1,5 +1,6 @@
 import { movies as staticMovies, showtimes as staticShowtimes } from "../data/movies";
 import type { Movie, Showtime } from "../data/movies";
+import { checkBackendOnline, getShowtimesAPI, getTicketsAPI } from "./api";
 
 export interface BookedTicket {
   id: string;
@@ -274,7 +275,10 @@ export function loadRooms(): RoomConfig[] {
   const defaultHallsByCinema = [
     { cinemaId: 1, halls: ["Hall 1", "Hall 2", "Hall 3"] },
     { cinemaId: 2, halls: ["Hall A", "Hall B"] },
-    { cinemaId: 3, halls: ["Hall X", "Hall Y"] }
+    { cinemaId: 3, halls: ["Hall X", "Hall Y"] },
+    { cinemaId: 4, halls: ["Hall I", "Hall II"] },
+    { cinemaId: 5, halls: ["Hall Alpha", "Hall Beta"] },
+    { cinemaId: 6, halls: ["Hall Gold", "Hall Silver"] }
   ];
 
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -331,6 +335,34 @@ export function loadSeatPricing(): SeatPricingConfig {
 
 export function saveSeatPricing(pricing: SeatPricingConfig) {
   localStorage.setItem("seat_pricing_db", JSON.stringify(pricing));
+}
+
+export async function syncWithBackend(): Promise<boolean> {
+  try {
+    const online = await checkBackendOnline();
+    if (!online) {
+      console.log("Backend offline, running in mock mode (local storage).");
+      return false;
+    }
+
+    // 1. Sync showtimes
+    const showtimes = await getShowtimesAPI();
+    if (showtimes && showtimes.length > 0) {
+      localStorage.setItem("showtimes_db", JSON.stringify(showtimes));
+    }
+
+    // 2. Sync tickets
+    const tickets = await getTicketsAPI();
+    if (tickets) {
+      localStorage.setItem("tickets_db", JSON.stringify(tickets));
+    }
+
+    console.log("Synchronized successfully with SQL Server!");
+    return true;
+  } catch (err: any) {
+    console.error("Failed to sync with backend database:", err.message);
+    return false;
+  }
 }
 
 

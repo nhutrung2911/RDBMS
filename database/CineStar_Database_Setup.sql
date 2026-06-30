@@ -199,7 +199,19 @@ INSERT INTO Showtime (MovieId, RoomId, StartTime, EndTime, Price) VALUES
 
 INSERT INTO Customer (FullName, Phone, Email) VALUES
 (N'Như Trung', '0901234567', 'nguyennhutrung788@gmail.com'),
-(N'Nguyễn Khách Hàng', '0923456789', 'customer@gmail.com');
+(N'Nguyễn Khách Hàng', '0923456789', 'customer@gmail.com'),
+(N'Nguyễn Văn B', '0123456789', 'customer2@gmail.com');
+GO
+
+-- Thêm hóa đơn đặc biệt dùng cho kịch bản báo cáo tương tranh (Non-repeatable Read / Phantom)
+IF NOT EXISTS (SELECT 1 FROM Ticket WHERE TicketId = 'CNS_REVENUE_DEL')
+BEGIN
+    INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status) VALUES
+    ('CNS_REVENUE_DEL', 1, '2026-06-15 10:00:00', 1200000.00, N'Tiền mặt', 'nguyennhutrung788@gmail.com', N'valid');
+
+    INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price) VALUES
+    ('CNS_REVENUE_DEL', 1, 1, 1200000.00);
+END
 GO
 
 
@@ -208,19 +220,25 @@ GO
 -- ----------------------------------------------------------------------------------
 
 -- 4.3.1. Khung nhìn hiển thị sơ đồ ghế theo suất chiếu (Trống/Đã bán)
-CREATE VIEW v_ShowtimeSeats AS
+CREATE VIEW v_ShowtimeSeats AS 
 SELECT 
-    sh.ShowtimeId,
+    st.ShowtimeId,
+    st.MovieId,
+    m.Title AS MovieTitle,
+    st.RoomId,
+    r.RoomName,
     s.SeatId,
     s.SeatNumber,
     s.SeatType,
     CASE 
-        WHEN td.TicketDetailId IS NOT NULL AND t.Status != N'canceled' THEN 'SOLD'
-        ELSE 'AVAILABLE'
-    END AS Status
-FROM Showtime sh
-INNER JOIN Seat s ON sh.RoomId = s.RoomId
-LEFT JOIN TicketDetail td ON sh.ShowtimeId = td.ShowtimeId AND s.SeatId = td.SeatId
+        WHEN td.TicketDetailId IS NOT NULL AND t.Status != N'canceled' THEN N'SOLD'
+        ELSE N'AVAILABLE'
+    END AS Status 
+FROM Showtime st 
+JOIN Room r ON st.RoomId = r.RoomId 
+JOIN Seat s ON r.RoomId = s.RoomId 
+JOIN Movie m ON st.MovieId = m.MovieId 
+LEFT JOIN TicketDetail td ON st.ShowtimeId = td.ShowtimeId AND s.SeatId = td.SeatId 
 LEFT JOIN Ticket t ON td.TicketId = t.TicketId;
 GO
 
@@ -229,13 +247,15 @@ CREATE VIEW v_RevenueByMovie AS
 SELECT 
     m.MovieId,
     m.Title AS MovieTitle,
-    COUNT(DISTINCT t.TicketId) AS TotalTickets,
+    c.CategoryName,
+    COUNT(DISTINCT td.TicketDetailId) AS TicketsSold,
     SUM(CASE WHEN t.TicketId IS NOT NULL THEN td.Price ELSE 0 END) AS TotalRevenue
 FROM Movie m
-LEFT JOIN Showtime sh ON m.MovieId = sh.MovieId
-LEFT JOIN TicketDetail td ON sh.ShowtimeId = td.ShowtimeId
+LEFT JOIN Category c ON m.CategoryId = c.CategoryId
+LEFT JOIN Showtime st ON m.MovieId = st.MovieId
+LEFT JOIN TicketDetail td ON st.ShowtimeId = td.ShowtimeId
 LEFT JOIN Ticket t ON td.TicketId = t.TicketId AND t.Status != N'canceled'
-GROUP BY m.MovieId, m.Title;
+GROUP BY m.MovieId, m.Title, c.CategoryName;
 GO
 
 
@@ -281,13 +301,15 @@ GO
 -- 4.5. XÂY DỰNG CÁC STORED PROCEDURE (CRUD & Nghiệp vụ)
 -- ----------------------------------------------------------------------------------
 
--- 4.5.1 Thêm phim mới
+-- 4.5.1 Thêm phim mới (usp_AddMovie)
 CREATE PROCEDURE usp_AddMovie
-    @Title NVARCHAR(250), @Duration INT, @CategoryId INT, @ReleaseDate DATE, @Poster NVARCHAR(500), @Status NVARCHAR(50)
+    @Title NVARCHAR(250), @Duration INT, @CategoryId INT, @ReleaseDate DATE, @Poster NVARCHAR(500), @Status NVARCHAR(50), @MovieId INT OUTPUT
 AS
 BEGIN
+    SET NOCOUNT ON;
     INSERT INTO Movie (Title, Duration, CategoryId, ReleaseDate, Poster, Status)
     VALUES (@Title, @Duration, @CategoryId, @ReleaseDate, @Poster, @Status);
+    SET @MovieId = SCOPE_IDENTITY();
 END;
 GO
 
@@ -296,6 +318,7 @@ CREATE PROCEDURE usp_UpdateMovie
     @MovieId INT, @Title NVARCHAR(250), @Duration INT, @CategoryId INT, @ReleaseDate DATE, @Poster NVARCHAR(500), @Status NVARCHAR(50)
 AS
 BEGIN
+    SET NOCOUNT ON;
     UPDATE Movie 
     SET Title = @Title, Duration = @Duration, CategoryId = @CategoryId, ReleaseDate = @ReleaseDate, Poster = @Poster, Status = @Status
     WHERE MovieId = @MovieId;
@@ -307,26 +330,33 @@ CREATE PROCEDURE usp_DeleteMovie
     @MovieId INT
 AS
 BEGIN
+    SET NOCOUNT ON;
     DELETE FROM Movie WHERE MovieId = @MovieId;
 END;
 GO
 
--- 4.5.4 Tìm kiếm phim
-CREATE PROCEDURE usp_SearchMovies
-    @Keyword NVARCHAR(100)
+-- 4.5.4 Tìm kiếm phim (usp_SearchMovie)
+CREATE PROCEDURE usp_SearchMovie
+    @Keyword NVARCHAR(50)
 AS
 BEGIN
-    SELECT * FROM Movie WHERE Title LIKE '%' + @Keyword + '%';
+    SET NOCOUNT ON;
+    SELECT m.MovieId, m.Title, m.Duration, c.CategoryName, m.ReleaseDate, m.Poster, m.Status
+    FROM Movie m
+    LEFT JOIN Category c ON m.CategoryId = c.CategoryId
+    WHERE m.Title LIKE '%' + @Keyword + '%' OR c.CategoryName LIKE '%' + @Keyword + '%';
 END;
 GO
 
--- 4.5.5 Thêm suất chiếu mới
+-- 4.5.5 Thêm suất chiếu mới (usp_AddShowtime)
 CREATE PROCEDURE usp_AddShowtime
-    @MovieId INT, @RoomId INT, @StartTime DATETIME, @EndTime DATETIME, @Price DECIMAL(18,2)
+    @MovieId INT, @RoomId INT, @StartTime DATETIME, @EndTime DATETIME, @Price DECIMAL(18,2), @ShowtimeId INT OUTPUT
 AS
 BEGIN
+    SET NOCOUNT ON;
     INSERT INTO Showtime (MovieId, RoomId, StartTime, EndTime, Price)
     VALUES (@MovieId, @RoomId, @StartTime, @EndTime, @Price);
+    SET @ShowtimeId = SCOPE_IDENTITY();
 END;
 GO
 
@@ -335,6 +365,7 @@ CREATE PROCEDURE usp_UpdateShowtime
     @ShowtimeId INT, @MovieId INT, @RoomId INT, @StartTime DATETIME, @EndTime DATETIME, @Price DECIMAL(18,2)
 AS
 BEGIN
+    SET NOCOUNT ON;
     UPDATE Showtime 
     SET MovieId = @MovieId, RoomId = @RoomId, StartTime = @StartTime, EndTime = @EndTime, Price = @Price
     WHERE ShowtimeId = @ShowtimeId;
@@ -346,19 +377,24 @@ CREATE PROCEDURE usp_DeleteShowtime
     @ShowtimeId INT
 AS
 BEGIN
+    SET NOCOUNT ON;
     DELETE FROM Showtime WHERE ShowtimeId = @ShowtimeId;
 END;
 GO
 
--- 4.5.8 Tìm kiếm suất chiếu
-CREATE PROCEDURE usp_SearchShowtimes
+-- 4.5.8 Tìm kiếm suất chiếu (usp_SearchShowtime)
+CREATE PROCEDURE usp_SearchShowtime
     @MovieId INT = NULL, @RoomId INT = NULL, @Date DATE = NULL
 AS
 BEGIN
-    SELECT * FROM Showtime 
-    WHERE (@MovieId IS NULL OR MovieId = @MovieId)
-      AND (@RoomId IS NULL OR RoomId = @RoomId)
-      AND (@Date IS NULL OR CAST(StartTime AS DATE) = @Date);
+    SET NOCOUNT ON;
+    SELECT st.ShowtimeId, m.Title AS MovieTitle, r.RoomName, st.StartTime, st.EndTime, st.Price
+    FROM Showtime st
+    JOIN Movie m ON st.MovieId = m.MovieId
+    JOIN Room r ON st.RoomId = r.RoomId
+    WHERE (@MovieId IS NULL OR st.MovieId = @MovieId)
+      AND (@RoomId IS NULL OR st.RoomId = @RoomId)
+      AND (@Date IS NULL OR CAST(st.StartTime AS DATE) = @Date);
 END;
 GO
 
@@ -418,48 +454,52 @@ GO
 -- 4.6. XÂY DỰNG CÁC TRIGGER
 -- ----------------------------------------------------------------------------------
 
--- 4.6.1. Bẫy lỗi bán trùng ghế (Ngăn chặn Insert nếu ghế đã được mua)
-CREATE TRIGGER trg_PreventDoubleBooking
-ON TicketDetail
-AFTER INSERT
-AS
-BEGIN
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i
-        JOIN TicketDetail td ON i.ShowtimeId = td.ShowtimeId AND i.SeatId = td.SeatId
-        JOIN Ticket t ON td.TicketId = t.TicketId
-        WHERE td.TicketDetailId != i.TicketDetailId AND t.Status != N'canceled'
-    )
-    BEGIN
-        RAISERROR(N'LỖI: Ghế này đã được bán thành công cho khách hàng khác!', 16, 1);
-        ROLLBACK TRANSACTION;
-    END
-END;
+-- 4.6.1. Bẫy lỗi bán trùng ghế (trg_PreventDoubleBooking)
+CREATE TRIGGER trg_PreventDoubleBooking 
+ON TicketDetail 
+INSTEAD OF INSERT 
+AS 
+BEGIN     
+    SET NOCOUNT ON;     
+    IF EXISTS (         
+        SELECT 1          
+        FROM inserted i         
+        JOIN TicketDetail td ON i.ShowtimeId = td.ShowtimeId AND i.SeatId = td.SeatId         
+        JOIN Ticket t ON td.TicketId = t.TicketId         
+        WHERE t.Status != N'canceled'     
+    )     
+    BEGIN         
+        RAISERROR(N'Lỗi hệ thống: Ghế này đã được khách hàng khác đặt mua thành công cho suất chiếu này!', 16, 1);         
+        ROLLBACK TRANSACTION;         
+        RETURN;     
+    END     
+    INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)     
+    SELECT TicketId, ShowtimeId, SeatId, Price     
+    FROM inserted; 
+END; 
 GO
 
--- 4.6.2. Bẫy lỗi trùng lịch chiếu (Kiểm tra thời gian suất chiếu mới có đè lên suất cũ không)
-CREATE TRIGGER trg_ShowtimeOverlapCheck
-ON Showtime
-AFTER INSERT, UPDATE
-AS
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM inserted i
-        JOIN Showtime s ON i.RoomId = s.RoomId
-        WHERE s.ShowtimeId != i.ShowtimeId
-          AND (
-              (i.StartTime >= s.StartTime AND i.StartTime < s.EndTime) OR
-              (i.EndTime > s.StartTime AND i.EndTime <= s.EndTime) OR
-              (i.StartTime <= s.StartTime AND i.EndTime >= s.EndTime)
-          )
-    )
-    BEGIN
-        RAISERROR(N'LỖI: Suất chiếu bị trùng lịch (chồng chéo thời gian) tại phòng chiếu này!', 16, 1);
-        ROLLBACK TRANSACTION;
-    END
-END;
+-- 4.6.2. Bẫy lỗi trùng lịch chiếu (trg_PreventOverlappingShowtimes)
+CREATE TRIGGER trg_PreventOverlappingShowtimes  
+ON Showtime  
+FOR INSERT, UPDATE  
+AS  
+BEGIN          
+    SET NOCOUNT ON;      
+    -- Kiểm tra sự trùng lặp thời gian trong cùng một phòng
+    -- Loại trừ chính khóa chính đang sửa (ShowtimeId) để tránh tự trùng lặp khi UPDATE
+    IF EXISTS (                  
+        SELECT 1                   
+        FROM inserted i                  
+        JOIN Showtime s ON i.RoomId = s.RoomId AND i.ShowtimeId != s.ShowtimeId                  
+        WHERE i.StartTime < s.EndTime AND i.EndTime > s.StartTime          
+    )          
+    BEGIN                  
+        RAISERROR(N'Lỗi hệ thống: Phòng chiếu này đang có lịch chiếu khác hoạt động trong khoảng thời gian được chọn!', 16, 1);                  
+        ROLLBACK TRANSACTION;                  
+        RETURN;          
+    END  
+END;  
 GO
 
 
@@ -534,9 +574,13 @@ BEGIN
         SELECT value, s.SeatId FROM STRING_SPLIT(@SeatNumbers, ',')
         INNER JOIN Seat s ON s.SeatNumber = value AND s.RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId);
 
-        -- SỬ DỤNG UPDLOCK VÀ HOLDLOCK ĐỂ GIỮ KHÓA ĐỌC ĐẾN KHI COMMIT
+        -- SỬ DỤNG UPDLOCK VÀ HOLDLOCK TRÊN BẢNG SEAT ĐỂ GIỮ KHÓA ĐỌC ĐẾN KHI COMMIT (TRÁNH BYPASS)
+        DECLARE @LockDummy INT;
+        SELECT @LockDummy = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId IN (SELECT SeatId FROM @SeatsTable);
+
+        -- KIỂM TRA TRẠNG THÁI GHẾ
         IF EXISTS (
-            SELECT 1 FROM TicketDetail td WITH (UPDLOCK, HOLDLOCK)
+            SELECT 1 FROM TicketDetail td
             JOIN Ticket t ON td.TicketId = t.TicketId
             WHERE td.ShowtimeId = @ShowtimeId AND td.SeatId IN (SELECT SeatId FROM @SeatsTable) AND t.Status != N'canceled'
         )
@@ -726,8 +770,10 @@ BEGIN
         SELECT @SeatId1 = SeatId FROM Seat WHERE SeatNumber = @Seat1 AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId);
         SELECT @SeatId2 = SeatId FROM Seat WHERE SeatNumber = @Seat2 AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId);
 
-        -- Bước 1: Khóa ghế thứ nhất
-        IF EXISTS (SELECT 1 FROM TicketDetail WITH (UPDLOCK, HOLDLOCK) WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId1)
+        -- Bước 1: Khóa ghế thứ nhất trong Seat
+        DECLARE @Dummy1 INT;
+        SELECT @Dummy1 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId1;
+        IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId1)
             RAISERROR(N'Ghế 1 đã bị khóa!', 16, 1);
 
         -- Giả lập độ trễ giữa 2 bước khóa
@@ -737,8 +783,10 @@ BEGIN
             WAITFOR DELAY @DelayStr;
         END
 
-        -- Bước 2: Khóa ghế thứ hai
-        IF EXISTS (SELECT 1 FROM TicketDetail WITH (UPDLOCK, HOLDLOCK) WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId2)
+        -- Bước 2: Khóa ghế thứ hai trong Seat
+        DECLARE @Dummy2 INT;
+        SELECT @Dummy2 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId2;
+        IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId2)
             RAISERROR(N'Ghế 2 đã bị khóa!', 16, 1);
 
         -- Thực hiện đặt vé
@@ -781,8 +829,10 @@ BEGIN
             SET @SeatId2 = @Temp;
         END
 
-        -- Bước 1: Khóa ghế có ID nhỏ hơn trước
-        IF EXISTS (SELECT 1 FROM TicketDetail WITH (UPDLOCK, HOLDLOCK) WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId1)
+        -- Bước 1: Khóa ghế có ID nhỏ hơn trước trong Seat
+        DECLARE @Dummy1 INT;
+        SELECT @Dummy1 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId1;
+        IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId1)
             RAISERROR(N'Ghế 1 đã bị khóa!', 16, 1);
 
         IF @LatencyMs > 0
@@ -791,8 +841,10 @@ BEGIN
             WAITFOR DELAY @DelayStr;
         END
 
-        -- Bước 2: Khóa ghế có ID lớn hơn sau
-        IF EXISTS (SELECT 1 FROM TicketDetail WITH (UPDLOCK, HOLDLOCK) WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId2)
+        -- Bước 2: Khóa ghế có ID lớn hơn sau trong Seat
+        DECLARE @Dummy2 INT;
+        SELECT @Dummy2 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId2;
+        IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId2)
             RAISERROR(N'Ghế 2 đã bị khóa!', 16, 1);
 
         -- Thực hiện đặt vé
@@ -812,5 +864,3 @@ BEGIN
 END;
 GO
 
-PRINT 'Kịch bản khởi tạo và cấu hình đầy đủ của đề tài CineStar RDBMS hoàn tất!';
-GO

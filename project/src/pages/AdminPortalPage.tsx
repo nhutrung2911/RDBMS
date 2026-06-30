@@ -9,8 +9,10 @@ import { cinemas, TICKET_PRICES } from "../data/movies";
 import { 
   loadMovies, saveMovies, loadShowtimes, saveShowtimes, 
   loadTickets, updateTicketStatus, BookedTicket, saveTicket,
-  loadRooms, saveRooms, loadSeatPricing, saveSeatPricing, RoomConfig
+  loadRooms, saveRooms, loadSeatPricing, saveSeatPricing, RoomConfig,
+  syncWithBackend
 } from "../lib/db";
+import { checkBackendOnline, getRevenueReportAPI, checkInTicketAPI } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
 interface AdminPortalPageProps {
@@ -218,44 +220,22 @@ export default function AdminPortalPage({
       addSqlLog(`--- KHỞI ĐẦU GIẢ LẬP NON-REPEATABLE READ ---`, "info");
       addSqlLog(`CLIENT A: SET TRANSACTION ISOLATION LEVEL ${concurrencyConfig.isolationLevel};`, "query");
       addSqlLog(`CLIENT A: BEGIN TRANSACTION A (${txId});`, "query");
-      addSqlLog(`CLIENT A: SELECT SUM(TotalPrice) FROM Ticket WHERE BookedAt BETWEEN '${start}' AND '${end}';`, "query");
+      addSqlLog(`CLIENT A: SELECT SUM(TotalPrice) FROM Ticket WHERE BookingTime BETWEEN '${start}' AND '${end}';`, "query");
     }
 
-    const initialTickets = loadTickets().filter(t => {
-      const ticketDate = t.bookedAt.substring(0, 10);
-      return ticketDate >= start && ticketDate <= end;
-    });
-    const initialTotal = initialTickets.reduce((sum, t) => sum + t.totalPrice, 0);
-    
-    if (addSqlLog) {
-      addSqlLog(`CLIENT A: Kết quả Đọc lần 1 = ${formatPrice(initialTotal)}đ.`, "success");
-      if (concurrencyConfig.isolationLevel === "REPEATABLE_READ" || concurrencyConfig.isolationLevel === "SERIALIZABLE") {
-        addSqlLog(`CLIENT A: Khóa SHARED LOCK (S) được giữ trên các dòng dữ liệu thỏa mãn điều kiện.`, "lock");
-      } else {
-        addSqlLog(`CLIENT A: Khóa SHARED LOCK (S) được giải phóng ngay sau khi đọc (READ COMMITTED).`, "info");
-      }
-    }
-
-    setNonRepResults(prev => ({
-      ...prev,
-      read1: initialTotal,
-      stage: 'background_change'
-    }));
-
-    let backgroundTicketDeleted = false;
-    setTimeout(() => {
+    // Set up logs timers to match the backend process dynamically
+    const t1 = setTimeout(() => {
+      setNonRepResults(prev => ({ ...prev, stage: 'background_change' }));
       const txBId = "TX_CANCEL_" + Math.random().toString(36).substring(2, 6).toUpperCase();
       if (addSqlLog) {
         addSqlLog(`CLIENT B: BEGIN TRANSACTION B (${txBId});`, "query");
       }
-
       if (concurrencyConfig.isolationLevel === "REPEATABLE_READ" || concurrencyConfig.isolationLevel === "SERIALIZABLE") {
         if (addSqlLog) {
           addSqlLog(`CLIENT B: DELETE FROM Ticket WHERE TicketID = 'CNS_REVENUE_DEL';`, "query");
           addSqlLog(`CLIENT B: [BLOCKED] Không thể xóa/sửa do CLIENT A đang giữ khóa Đọc (Shared Lock). Đang chờ giải phóng...`, "lock");
         }
       } else {
-        backgroundTicketDeleted = true;
         if (addSqlLog) {
           addSqlLog(`CLIENT B: DELETE FROM Ticket WHERE TicketID = 'CNS_REVENUE_DEL'; (Giả lập hủy vé trị giá 1.200.000đ)`, "query");
           addSqlLog(`CLIENT B: COMMIT TRANSACTION B;`, "success");
@@ -264,68 +244,133 @@ export default function AdminPortalPage({
       }
     }, 400);
 
-    await new Promise(resolve => setTimeout(resolve, delay));
+    const t2 = setTimeout(() => {
+      setNonRepResults(prev => ({ ...prev, stage: 'reading2' }));
+      if (addSqlLog) {
+        addSqlLog(`CLIENT A: SELECT SUM(TotalPrice) FROM Ticket WHERE BookingTime BETWEEN '${start}' AND '${end}'; (Truy vấn lại lần 2)`, "query");
+      }
+    }, Math.max(500, delay - 200));
 
-    setNonRepResults(prev => ({
-      ...prev,
-      stage: 'reading2'
-    }));
+    try {
+      const online = await checkBackendOnline();
+      if (online) {
+        const res = await getRevenueReportAPI({
+          startDate: start,
+          endDate: end,
+          reportType: reportType,
+          isolationLevel: concurrencyConfig.isolationLevel,
+          useLockFix: concurrencyConfig.useLockFix,
+          latencyMs: delay
+        });
 
-    if (addSqlLog) {
-      addSqlLog(`CLIENT A: SELECT SUM(TotalPrice) FROM Ticket WHERE BookedAt BETWEEN '${start}' AND '${end}'; (Truy vấn lại lần 2)`, "query");
-    }
+        clearTimeout(t1);
+        clearTimeout(t2);
 
-    const finalTotal = backgroundTicketDeleted ? (initialTotal - 1200000) : initialTotal;
+        const hasDeleted = res.read1 !== res.read2;
+        if (addSqlLog) {
+          addSqlLog(`CLIENT A: Kết quả Đọc lần 1 = ${formatPrice(res.read1)}`, "success");
+          if (concurrencyConfig.isolationLevel === "REPEATABLE_READ" || concurrencyConfig.isolationLevel === "SERIALIZABLE") {
+            addSqlLog(`CLIENT A: Khóa SHARED LOCK (S) được giữ trên các dòng dữ liệu thỏa mãn điều kiện.`, "lock");
+          } else {
+            addSqlLog(`CLIENT A: Khóa SHARED LOCK (S) được giải phóng ngay sau khi đọc (READ COMMITTED).`, "info");
+          }
+          
+          if (concurrencyConfig.isolationLevel === "REPEATABLE_READ" || concurrencyConfig.isolationLevel === "SERIALIZABLE") {
+            addSqlLog(`CLIENT A: SELECT SUM(TotalPrice) FROM Ticket WHERE BookingTime BETWEEN '${start}' AND '${end}'; (Truy vấn lại lần 2)`, "query");
+            addSqlLog(`CLIENT A: Kết quả Đọc lần 2 = ${formatPrice(res.read2)}`, "success");
+            addSqlLog(`[THÀNH CÔNG] Bảo toàn tính nhất quán: Doanh thu không đổi! (CLIENT B bị chặn hoặc đọc từ Snapshot)`, "success");
+            addSqlLog(`CLIENT B: [RESUMED] Transaction A committed. Client B now cancels the ticket...`, "success");
+          } else {
+            addSqlLog(`CLIENT A: SELECT SUM(TotalPrice) FROM Ticket WHERE BookingTime BETWEEN '${start}' AND '${end}'; (Truy vấn lại lần 2)`, "query");
+            addSqlLog(`CLIENT A: Kết quả Đọc lần 2 = ${formatPrice(res.read2)}`, "success");
+            if (hasDeleted) {
+              addSqlLog(`[LỖI] NON-REPEATABLE READ XẢY RA: Doanh thu thay đổi giữa hai lần đọc trong cùng một Transaction!`, "error");
+            } else {
+              addSqlLog(`CLIENT A: Kết quả nhất quán vì vé mẫu 'CNS_REVENUE_DEL' đã bị xóa hoặc không tìm thấy.`, "info");
+            }
+          }
+          addSqlLog(`CLIENT A: COMMIT TRANSACTION A;`, "success");
+          addSqlLog(`--- KẾT THÚC GIẢ LẬP NON-REPEATABLE READ ---`, "info");
+        }
 
-    if (addSqlLog) {
-      addSqlLog(`CLIENT A: Kết quả Đọc lần 2 = ${formatPrice(finalTotal)}đ.`, "success");
-      if (backgroundTicketDeleted) {
-        addSqlLog(`[LỖI] NON-REPEATABLE READ XẢY RA: Doanh thu thay đổi giữa hai lần đọc trong cùng một Transaction!`, "error");
+        setNonRepResults({
+          isActive: true,
+          read1: res.read1,
+          read2: res.read2,
+          stage: 'complete'
+        });
+
+        setReportData(res.data);
+        setHasSearchedReport(true);
       } else {
-        addSqlLog(`[THÀNH CÔNG] Bảo toàn tính nhất quán: Doanh thu không đổi! (CLIENT B bị chặn hoặc đọc từ Snapshot)`, "success");
-        addSqlLog(`CLIENT B: [RESUMED] Transaction A committed. Client B now cancels the ticket...`, "success");
+        const initialTickets = loadTickets().filter(t => {
+          const ticketDate = t.bookedAt.substring(0, 10);
+          return ticketDate >= start && ticketDate <= end;
+        });
+        const initialTotal = initialTickets.reduce((sum, t) => sum + t.totalPrice, 0);
+        
+        if (addSqlLog) {
+          addSqlLog(`CLIENT A: Kết quả Đọc lần 1 = ${formatPrice(initialTotal)}`, "success");
+        }
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        let finalTotal = initialTotal;
+        const isLowIsolation = 
+          concurrencyConfig.isolationLevel === "READ_UNCOMMITTED" || 
+          concurrencyConfig.isolationLevel === "READ_COMMITTED";
+
+        if (isLowIsolation && initialTickets.length > 0) {
+          finalTotal = Math.max(0, initialTotal - 1200000);
+        }
+
+        if (addSqlLog) {
+          addSqlLog(`CLIENT A: Kết quả Đọc lần 2 = ${formatPrice(finalTotal)}`, "success");
+          if (isLowIsolation && initialTotal !== finalTotal) {
+            addSqlLog(`[LỖI] NON-REPEATABLE READ XẢY RA: Doanh thu thay đổi giữa hai lần đọc trong cùng một Transaction!`, "error");
+          } else {
+            addSqlLog(`[THÀNH CÔNG] Bảo toàn tính nhất quán: Doanh thu không đổi! (CLIENT B bị chặn hoặc đọc từ Snapshot)`, "success");
+          }
+          addSqlLog(`CLIENT A: COMMIT TRANSACTION A;`, "success");
+          addSqlLog(`--- KẾT THÚC GIẢ LẬP NON-REPEATABLE READ ---`, "info");
+        }
+
+        setNonRepResults({
+          isActive: true,
+          read1: initialTotal,
+          read2: finalTotal,
+          stage: 'complete'
+        });
+
+        const groups: Record<string, { label: string; revenue: number; ticketsCount: number }> = {};
+        initialTickets.forEach(t => {
+          let label = "";
+          if (reportType === "date") label = t.bookedAt.substring(0, 10);
+          else if (reportType === "cinema") label = t.cinemaName;
+          else if (reportType === "movie") label = t.movieTitle;
+
+          if (!groups[label]) {
+            groups[label] = { label, revenue: 0, ticketsCount: 0 };
+          }
+          groups[label].revenue += t.totalPrice;
+          groups[label].ticketsCount += t.seats.length;
+        });
+        const data = Object.values(groups);
+        if (isLowIsolation && data.length > 0) {
+          data[0].revenue = Math.max(0, data[0].revenue - 1200000);
+        }
+        setReportData(data);
+        setHasSearchedReport(true);
       }
-      addSqlLog(`CLIENT A: COMMIT TRANSACTION A;`, "success");
-      addSqlLog(`--- KẾT THÚC GIẢ LẬP NON-REPEATABLE READ ---`, "info");
-    }
-
-    setNonRepResults(prev => ({
-      ...prev,
-      read2: finalTotal,
-      stage: 'complete'
-    }));
-
-    const filtered = ticketsList.filter(t => {
-      const ticketDate = t.bookedAt.substring(0, 10);
-      return ticketDate >= start && ticketDate <= end;
-    });
-
-    const groups: Record<string, { label: string; revenue: number; ticketsCount: number }> = {};
-    filtered.forEach(t => {
-      let label = "";
-      if (reportType === "date") label = t.bookedAt.substring(0, 10);
-      else if (reportType === "cinema") label = t.cinemaName;
-      else if (reportType === "movie") label = t.movieTitle;
-
-      if (!groups[label]) {
-        groups[label] = { label, revenue: 0, ticketsCount: 0 };
+    } catch (err: any) {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      if (addSqlLog) {
+        addSqlLog(`CLIENT A: Lỗi báo cáo: ${err.message}`, "error");
       }
-      groups[label].revenue += t.totalPrice;
-      groups[label].ticketsCount += t.seats.length;
-    });
-
-    const result = Object.values(groups);
-    if (backgroundTicketDeleted && result.length > 0) {
-      result[0].revenue = Math.max(0, result[0].revenue - 1200000);
+      alert(`Lỗi khi tạo báo cáo doanh thu: ${err.message}`);
+      setNonRepResults(prev => ({ ...prev, isActive: false }));
     }
-    
-    if (reportType === "date") {
-      result.sort((a, b) => a.label.localeCompare(b.label));
-    } else {
-      result.sort((a, b) => b.revenue - a.revenue);
-    }
-    setReportData(result);
-    setHasSearchedReport(true);
   };
 
   // Load database
@@ -760,14 +805,23 @@ export default function AdminPortalPage({
     }
   };
 
-  const handleCheckIn = (id: string) => {
-    const success = updateTicketStatus(id, "used");
-    if (success) {
+  const handleCheckIn = async (id: string) => {
+    try {
+      const online = await checkBackendOnline();
+      if (online) {
+        await checkInTicketAPI(id);
+        await syncWithBackend();
+      } else {
+        updateTicketStatus(id, "used");
+      }
       refreshDB();
       // Update local search result state
       if (searchTicketResult && searchTicketResult.id === id) {
         setSearchTicketResult(prev => prev ? { ...prev, status: "used" } : null);
       }
+      alert("Đã soát vé check-in thành công!");
+    } catch (err: any) {
+      alert(`Lỗi soát vé: ${err.message}`);
     }
   };
 

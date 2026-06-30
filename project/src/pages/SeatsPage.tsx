@@ -3,12 +3,14 @@ import { ArrowLeft, Monitor, ChevronRight, CheckCircle2, ShieldAlert, AlertTrian
 import type { Movie, Showtime } from "../data/movies";
 import { cinemas, TICKET_PRICES } from "../data/movies";
 import { 
-  loadSeatLocks, loadTickets, isSeatLocked, addSeatLock, removeSeatLock, loadRooms, loadSeatPricing
+  loadSeatLocks, loadTickets, isSeatLocked, loadRooms, loadSeatPricing, syncWithBackend
 } from "../lib/db";
+import { bookTicketAPI } from "../lib/api";
 
 interface SeatsPageProps {
   movie: Movie;
   showtime: Showtime;
+  userEmail: string | null;
   onBack: () => void;
   onConfirm: (
     seats: string[], 
@@ -58,7 +60,7 @@ const TYPE_LABELS: Record<string, string> = {
   standard: "Standard", "4dx": "4DX", imax: "IMAX", sweetbox: "Sweetbox",
 };
 
-export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurrencyConfig, addSqlLog }: SeatsPageProps) {
+export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfirm, concurrencyConfig, addSqlLog }: SeatsPageProps) {
   const matchingRoom = useMemo(() => {
     return loadRooms().find(r => r.name === showtime.hall && r.cinemaId === showtime.cinemaId);
   }, [showtime.hall, showtime.cinemaId]);
@@ -144,24 +146,22 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
         addSqlLog(`CLIENT A: SET TRANSACTION ISOLATION LEVEL READ COMMITTED;`, "query");
         addSqlLog(`CLIENT A: BEGIN TRANSACTION A (${txId});`, "query");
         if (concurrencyConfig.useLockFix) {
-          addSqlLog(`CLIENT A: SELECT SeatStatus FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatID = '${seat}' AND ShowtimeID = ${showtime.id};`, "lock");
-          addSqlLog(`CLIENT A: Ghế '${seat}' đang trống. Khóa UPDLOCK đã được giữ trên dòng SeatID='${seat}'.`, "success");
+          addSqlLog(`CLIENT A: SELECT SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatNumber = '${seat}';`, "lock");
         } else {
-          addSqlLog(`CLIENT A: SELECT SeatStatus FROM Seat WHERE SeatID = '${seat}' AND ShowtimeID = ${showtime.id};`, "query");
-          addSqlLog(`CLIENT A: Ghế '${seat}' đang trống. Không có khóa nào được giữ (SP cũ).`, "info");
+          addSqlLog(`CLIENT A: SELECT SeatId FROM Seat WHERE SeatNumber = '${seat}';`, "query");
         }
       }
 
-      // Simultaneously trigger B after 400ms
+      const txBId = "TX_B_" + Math.random().toString(36).substring(2, 6).toUpperCase();
+      
       setTimeout(() => {
-        const txBId = "TX_B_" + Math.random().toString(36).substring(2, 6).toUpperCase();
         if (addSqlLog) {
           addSqlLog(`CLIENT B: BEGIN TRANSACTION B (${txBId});`, "query");
           if (concurrencyConfig.useLockFix) {
-            addSqlLog(`CLIENT B: SELECT SeatStatus FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatID = '${seat}' AND ShowtimeID = ${showtime.id};`, "lock");
-            addSqlLog(`CLIENT B: [BLOCKED] Đang đợi giải phóng khóa UPDLOCK trên dòng SeatID='${seat}'...`, "lock");
+            addSqlLog(`CLIENT B: SELECT SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatNumber = '${seat}';`, "lock");
+            addSqlLog(`CLIENT B: [BLOCKED] Đang đợi giải phóng khóa UPDLOCK trên dòng ghế '${seat}'...`, "lock");
           } else {
-            addSqlLog(`CLIENT B: SELECT SeatStatus FROM Seat WHERE SeatID = '${seat}' AND ShowtimeID = ${showtime.id};`, "query");
+            addSqlLog(`CLIENT B: SELECT SeatId FROM Seat WHERE SeatNumber = '${seat}';`, "query");
             addSqlLog(`CLIENT B: Ghế '${seat}' đang trống (Dirty/Uncommitted Read). CLIENT B chuẩn bị đặt đè.`, "info");
           }
         }
@@ -173,63 +173,104 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
             stage: 'blocked'
           }));
         }
+
+        bookTicketAPI({
+          showtimeId: showtime.id,
+          seats: [seat],
+          movieTitle: movie.titleVi || movie.title,
+          moviePoster: movie.poster,
+          cinemaName: cinema?.name || "CineStar Cinema",
+          showtimeDate: showtime.date,
+          showtimeTime: showtime.time,
+          totalPrice: totalPrice,
+          paymentMethod: "Ví điện tử ZaloPay",
+          userEmail: "khachB@gmail.com",
+          isolationLevel: concurrencyConfig.isolationLevel,
+          useLockFix: concurrencyConfig.useLockFix,
+          latencyMs: 0
+        }).then(res => {
+          if (addSqlLog) {
+            addSqlLog(`CLIENT B: UPDATE Seat SET SeatStatus = 'SOLD' WHERE SeatNumber = '${seat}';`, "query");
+            addSqlLog(`CLIENT B: COMMIT TRANSACTION B;`, "success");
+            addSqlLog(`CLIENT B: Đặt ghế '${seat}' thành công! (Ghi đè A nếu không sửa lỗi)`, "success");
+          }
+          return res;
+        }).catch(err => {
+          if (addSqlLog) {
+            addSqlLog(`CLIENT B: [RESUMED] Khóa được giải phóng. Đọc lại SeatStatus...`, "lock");
+            addSqlLog(`CLIENT B: Ghế '${seat}' đã có trạng thái 'SOLD' (Giao dịch thất bại).`, "error");
+            addSqlLog(`CLIENT B: ROLLBACK TRANSACTION B;`, "error");
+            addSqlLog(`CLIENT B: Lỗi: ${err.message}`, "error");
+          }
+          throw err;
+        });
       }, 400);
 
-      // Wait for latency to complete A's transaction
-      await new Promise(resolve => setTimeout(resolve, delay));
-
-      // Lock seat in DB for A
-      addSeatLock(showtime.id, seat, txId, 'sold');
-      if (addSqlLog) {
-        addSqlLog(`CLIENT A: UPDATE Seat SET SeatStatus = 'SOLD' WHERE SeatID = '${seat}';`, "query");
-        addSqlLog(`CLIENT A: COMMIT TRANSACTION A;`, "success");
-        addSqlLog(`CLIENT A: Đặt ghế '${seat}' thành công! Giải phóng khóa.`, "success");
-      }
-
-      // Check B's outcome
-      if (concurrencyConfig.useLockFix) {
-        // B wakes up, sees seat is sold, rollback
-        if (addSqlLog) {
-          addSqlLog(`CLIENT B: [RESUMED] Khóa được giải phóng. Đọc lại SeatStatus...`, "lock");
-          addSqlLog(`CLIENT B: Ghế '${seat}' đã có trạng thái 'SOLD'.`, "error");
-          addSqlLog(`CLIENT B: ROLLBACK TRANSACTION B;`, "error");
-          addSqlLog(`CLIENT B: Đặt vé thất bại do ghế đã được mua!`, "error");
-          addSqlLog(`--- KẾT THÚC GIẢ LẬP: TRÁNH ĐƯỢC LOST UPDATE ---`, "success");
-        }
-        setSimState({
-          isActive: true,
-          message: `Giao dịch A đặt vé thành công! Giao dịch B tự động ROLLBACK khi nhận thấy ghế ${seat} đã bị khóa bán.`,
-          stage: 'success'
+      try {
+        await bookTicketAPI({
+          showtimeId: showtime.id,
+          seats: [seat],
+          movieTitle: movie.titleVi || movie.title,
+          moviePoster: movie.poster,
+          cinemaName: cinema?.name || "CineStar Cinema",
+          showtimeDate: showtime.date,
+          showtimeTime: showtime.time,
+          totalPrice: totalPrice,
+          paymentMethod: "Ví điện tử MoMo",
+          userEmail: userEmail || "khachA@gmail.com",
+          isolationLevel: concurrencyConfig.isolationLevel,
+          useLockFix: concurrencyConfig.useLockFix,
+          latencyMs: delay
         });
-        setTimeout(() => {
-          setSimState(prev => ({ ...prev, isActive: false }));
-          onConfirm(selectedSeats, totalPrice, combosList);
-        }, 3000);
-      } else {
-        // Lost update occurs - B overwrites or both write
-        addSeatLock(showtime.id, seat, "TX_B_OVERWRITE", 'sold');
+
         if (addSqlLog) {
-          addSqlLog(`CLIENT B: UPDATE Seat SET SeatStatus = 'SOLD' WHERE SeatID = '${seat}';`, "query");
-          addSqlLog(`CLIENT B: COMMIT TRANSACTION B;`, "success");
-          addSqlLog(`CLIENT B: Đặt ghế '${seat}' thành công (ghi đè A)!`, "success");
-          addSqlLog(`[CẢNH BÁO] LOST UPDATE XẢY RA: Cả hai client đều ghi nhận thành công, nhưng vé của Client A đã bị mất dữ liệu cập nhật!`, "error");
-          addSqlLog(`--- KẾT THÚC GIẢ LẬP: XẢY RA LỖI TRANH CHẤP ---`, "error");
+          addSqlLog(`CLIENT A: UPDATE Seat SET SeatStatus = 'SOLD' WHERE SeatNumber = '${seat}';`, "query");
+          addSqlLog(`CLIENT A: COMMIT TRANSACTION A;`, "success");
+          addSqlLog(`CLIENT A: Đặt ghế '${seat}' thành công! Giải phóng khóa.`, "success");
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await syncWithBackend();
+
+        if (concurrencyConfig.useLockFix) {
+          setSimState({
+            isActive: true,
+            message: `Giao dịch A đặt vé thành công! Giao dịch B tự động ROLLBACK khi nhận thấy ghế ${seat} đã bị khóa bán.`,
+            stage: 'success'
+          });
+          setTimeout(() => {
+            setSimState(prev => ({ ...prev, isActive: false }));
+            onConfirm(selectedSeats, totalPrice, combosList);
+          }, 3000);
+        } else {
+          setSimState({
+            isActive: true,
+            message: `LỖI XẢY RA! Cả 2 giao dịch A và B đều báo thành công. Ghế ${seat} bị bán trùng! (Mất dữ liệu cập nhật của A)`,
+            stage: 'error'
+          });
+          setTimeout(() => {
+            setSimState(prev => ({ ...prev, isActive: false }));
+            onConfirm(selectedSeats, totalPrice, combosList);
+          }, 4000);
+        }
+      } catch (err: any) {
+        if (addSqlLog) {
+          addSqlLog(`CLIENT A: Lỗi: ${err.message}`, "error");
         }
         setSimState({
           isActive: true,
-          message: `LỖI XẢY RA! Cả 2 giao dịch A và B đều báo thành công. Ghế ${seat} bị bán trùng! (Mất dữ liệu cập nhật của A)`,
+          message: `Giao dịch A thất bại! Lỗi: ${err.message}`,
           stage: 'error'
         });
-        setTimeout(() => {
-          setSimState(prev => ({ ...prev, isActive: false }));
-          onConfirm(selectedSeats, totalPrice, combosList);
-        }, 4000);
+        setTimeout(() => setSimState(prev => ({ ...prev, isActive: false })), 4000);
       }
     }
 
     // 2. DEADLOCK SCENARIO
     else if (concurrencyConfig.scenario === "deadlock" && selectedSeats.length >= 2) {
       const [seat1, seat2] = selectedSeats;
+      const sorted = [...selectedSeats].sort();
+      
       setSimState({
         isActive: true,
         message: `Đang bắt đầu giao dịch đặt combo ghế {${seat1}, ${seat2}}...`,
@@ -238,58 +279,117 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
 
       if (addSqlLog) {
         addSqlLog(`--- KHỞI ĐẦU GIẢ LẬP DEADLOCK ---`, "info");
+        addSqlLog(`CLIENT A: SET TRANSACTION ISOLATION LEVEL READ COMMITTED;`, "query");
         addSqlLog(`CLIENT A: BEGIN TRANSACTION A (${txId});`, "query");
-      }
-
-      if (concurrencyConfig.useLockFix) {
-        const sorted = [...selectedSeats].sort();
-        if (addSqlLog) {
+        if (concurrencyConfig.useLockFix) {
           addSqlLog(`CLIENT A (Sửa lỗi): Tự động sắp xếp dãy ghế chọn: ${sorted.join(', ')}`, "success");
           addSqlLog(`CLIENT A: Khóa ghế đầu tiên '${sorted[0]}' trong danh sách...`, "lock");
+        } else {
+          addSqlLog(`CLIENT A: Khóa ghế '${seat1}' đầu tiên...`, "lock");
         }
-        
-        addSeatLock(showtime.id, sorted[0], txId, 'pending');
-        if (addSqlLog) {
-          addSqlLog(`CLIENT A: Đã khóa '${sorted[0]}'.`, "success");
-        }
+      }
 
-        // B tries to lock
-        setTimeout(() => {
-          const txBId = "TX_B_" + Math.random().toString(36).substring(2, 6).toUpperCase();
-          if (addSqlLog) {
-            addSqlLog(`CLIENT B: BEGIN TRANSACTION B (${txBId});`, "query");
+      const seatsA = concurrencyConfig.useLockFix ? sorted : [seat1, seat2];
+      const seatsB = concurrencyConfig.useLockFix ? sorted : [seat2, seat1];
+
+      const txBId = "TX_B_" + Math.random().toString(36).substring(2, 6).toUpperCase();
+
+      setTimeout(() => {
+        if (addSqlLog) {
+          addSqlLog(`CLIENT B: BEGIN TRANSACTION B (${txBId});`, "query");
+          if (concurrencyConfig.useLockFix) {
             addSqlLog(`CLIENT B: Tự động sắp xếp dãy ghế: ${sorted.join(', ')}`, "success");
             addSqlLog(`CLIENT B: Thử khóa ghế '${sorted[0]}' đầu tiên...`, "lock");
             addSqlLog(`CLIENT B: [BLOCKED] Ghế '${sorted[0]}' đang bị giữ bởi CLIENT A. Đang xếp hàng chờ...`, "lock");
+          } else {
+            addSqlLog(`CLIENT B: Khóa thành công ghế '${seat2}'.`, "success");
+            addSqlLog(`CLIENT B: Yêu cầu khóa tiếp ghế '${seat1}'...`, "lock");
+            addSqlLog(`CLIENT B: [BLOCKED] Đang chờ CLIENT A giải phóng ghế '${seat1}'...`, "lock");
           }
+        }
+
+        if (concurrencyConfig.useLockFix) {
           setSimState(prev => ({
             ...prev,
             message: `Giao dịch B tự động xếp hàng chờ (Blocked) ở ghế ${sorted[0]} thay vì khóa chéo. Không có Deadlock!`,
             stage: 'blocked'
           }));
-        }, 400);
-
-        await new Promise(resolve => setTimeout(resolve, delay));
-
-        // A locks seat 2
-        addSeatLock(showtime.id, sorted[1], txId, 'pending');
-        if (addSqlLog) {
-          addSqlLog(`CLIENT A: Khóa tiếp ghế '${sorted[1]}'.`, "lock");
-          addSqlLog(`CLIENT A: UPDATE Seat SET SeatStatus = 'SOLD' FOR BOTH; COMMIT;`, "query");
-          addSqlLog(`CLIENT A: Hoàn tất đặt vé! Giao dịch A committed. Giải phóng khóa.`, "success");
+        } else {
+          setSimState(prev => ({
+            ...prev,
+            message: `Giao dịch A đang giữ khóa ghế ${seat1}, Giao dịch B đang giữ khóa ghế ${seat2}...`,
+            stage: 'blocked'
+          }));
         }
 
-        // B resumes after A commits
-        setTimeout(() => {
+        bookTicketAPI({
+          showtimeId: showtime.id,
+          seats: seatsB,
+          movieTitle: movie.titleVi || movie.title,
+          moviePoster: movie.poster,
+          cinemaName: cinema?.name || "CineStar Cinema",
+          showtimeDate: showtime.date,
+          showtimeTime: showtime.time,
+          totalPrice: totalPrice,
+          paymentMethod: "Ví điện tử ZaloPay",
+          userEmail: "khachB@gmail.com",
+          isolationLevel: concurrencyConfig.isolationLevel,
+          useLockFix: concurrencyConfig.useLockFix,
+          latencyMs: 0
+        }).then(res => {
           if (addSqlLog) {
-            addSqlLog(`CLIENT B: [RESUMED] Bắt đầu xử lý khóa.`, "lock");
-            addSqlLog(`CLIENT B: Nhận thấy ghế '${sorted[0]}' đã bán. Tự động hủy và ROLLBACK.`, "error");
+            if (concurrencyConfig.useLockFix) {
+              addSqlLog(`CLIENT B: [RESUMED] Bắt đầu xử lý khóa.`, "lock");
+              addSqlLog(`CLIENT B: Nhận thấy ghế '${sorted[0]}' đã bán. Tự động hủy và ROLLBACK.`, "error");
+            } else {
+              addSqlLog(`CLIENT B: [RESUMED] Khóa '${seat1}' được giải phóng. CLIENT B đặt vé thành công!`, "success");
+            }
           }
-        }, delay + 400);
+          return res;
+        }).catch(err => {
+          if (addSqlLog) {
+            addSqlLog(`CLIENT B: Lỗi: ${err.message}`, "error");
+          }
+          throw err;
+        });
+      }, 400);
+
+      try {
+        await bookTicketAPI({
+          showtimeId: showtime.id,
+          seats: seatsA,
+          movieTitle: movie.titleVi || movie.title,
+          moviePoster: movie.poster,
+          cinemaName: cinema?.name || "CineStar Cinema",
+          showtimeDate: showtime.date,
+          showtimeTime: showtime.time,
+          totalPrice: totalPrice,
+          paymentMethod: "Ví điện tử MoMo",
+          userEmail: userEmail || "khachA@gmail.com",
+          isolationLevel: concurrencyConfig.isolationLevel,
+          useLockFix: concurrencyConfig.useLockFix,
+          latencyMs: delay
+        });
+
+        if (addSqlLog) {
+          if (concurrencyConfig.useLockFix) {
+            addSqlLog(`CLIENT A: Khóa tiếp ghế '${sorted[1]}'.`, "lock");
+            addSqlLog(`CLIENT A: UPDATE Seat SET SeatStatus = 'SOLD' FOR BOTH; COMMIT;`, "query");
+            addSqlLog(`CLIENT A: Hoàn tất đặt vé! Giao dịch A committed. Giải phóng khóa.`, "success");
+          } else {
+            addSqlLog(`CLIENT A: Yêu cầu khóa tiếp ghế '${seat2}'...`, "lock");
+            addSqlLog(`CLIENT A: Đặt vé thành công!`, "success");
+          }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await syncWithBackend();
 
         setSimState({
           isActive: true,
-          message: `SỬA LỖI THÀNH CÔNG: Sắp xếp thứ tự khóa tránh được Deadlock. Giao dịch A đặt vé thành công, Giao dịch B chờ đợi và tự rollback an toàn.`,
+          message: concurrencyConfig.useLockFix
+            ? `SỬA LỖI THÀNH CÔNG: Sắp xếp thứ tự khóa tránh được Deadlock. Giao dịch A đặt vé thành công, Giao dịch B chờ đợi và tự rollback an toàn.`
+            : `Giao dịch A đặt vé thành công.`,
           stage: 'success'
         });
 
@@ -297,59 +397,25 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
           setSimState(prev => ({ ...prev, isActive: false }));
           onConfirm(selectedSeats, totalPrice, combosList);
         }, 3000);
-
-      } else {
-        // Client A locks seat 1
-        addSeatLock(showtime.id, seat1, txId, 'pending');
+      } catch (err: any) {
         if (addSqlLog) {
-          addSqlLog(`CLIENT A: Khóa thành công ghế '${seat1}'.`, "success");
-        }
-
-        // Client B locks seat 2 after 400ms
-        const txBId = "TX_B_" + Math.random().toString(36).substring(2, 6).toUpperCase();
-        setTimeout(() => {
-          if (addSqlLog) {
-            addSqlLog(`CLIENT B: BEGIN TRANSACTION B (${txBId});`, "query");
-            addSqlLog(`CLIENT B: Khóa thành công ghế '${seat2}'.`, "success");
-          }
-          setSimState(prev => ({
-            ...prev,
-            message: `Giao dịch A đang giữ khóa ghế ${seat1}, Giao dịch B đang giữ khóa ghế ${seat2}...`,
-            stage: 'blocked'
-          }));
-        }, 400);
-
-        await new Promise(resolve => setTimeout(resolve, delay / 2));
-
-        // Now A tries to lock seat 2 (held by B)
-        if (addSqlLog) {
-          addSqlLog(`CLIENT A: Yêu cầu khóa tiếp ghế '${seat2}'...`, "lock");
-          addSqlLog(`CLIENT A: [BLOCKED] Đang chờ CLIENT B giải phóng ghế '${seat2}'...`, "lock");
-        }
-
-        // B tries to lock seat 1 (held by A)
-        setTimeout(() => {
-          if (addSqlLog) {
-            addSqlLog(`CLIENT B: Yêu cầu khóa tiếp ghế '${seat1}'...`, "lock");
-            addSqlLog(`CLIENT B: [BLOCKED] Đang chờ CLIENT A giải phóng ghế '${seat1}'...`, "lock");
+          if (err.message.includes("deadlock") || err.message.includes("1205")) {
             addSqlLog(`[DEADLOCK] !!! PHÁT HIỆN KHÓA CHẾT GIỮA TRAN A và TRAN B !!!`, "error");
             addSqlLog(`DATABASE ENGINE: Chọn TRANSACTION A làm nạn nhân (Deadlock Victim).`, "error");
             addSqlLog(`CLIENT A: Transaction A was deadlocked on lock resources with another process. SQL Error: 1205.`, "error");
             addSqlLog(`CLIENT A: ROLLBACK TRANSACTION A;`, "error");
-            addSqlLog(`CLIENT B: [RESUMED] Khóa '${seat1}' được giải phóng. CLIENT B đặt vé thành công!`, "success");
-            addSqlLog(`--- KẾT THÚC GIẢ LẬP: LỖI DEADLOCK 1205 ---`, "error");
+          } else {
+            addSqlLog(`CLIENT A: Lỗi: ${err.message}`, "error");
           }
-          
-          setSimState({
-            isActive: true,
-            message: `LỖI KHÓA CHẾT (Deadlock 1205)! Giao dịch A bị Database hủy bỏ (Rollback) vì khóa chéo với Giao dịch B.`,
-            stage: 'deadlock'
-          });
+        }
 
-          removeSeatLock(showtime.id, seat1);
-          addSeatLock(showtime.id, seat1, txBId, 'sold');
-          addSeatLock(showtime.id, seat2, txBId, 'sold');
-        }, 600);
+        setSimState({
+          isActive: true,
+          message: err.message.includes("deadlock") || err.message.includes("1205")
+            ? `LỖI KHÓA CHẾT (Deadlock 1205)! Giao dịch A bị Database hủy bỏ (Rollback) vì khóa chéo với Giao dịch B.`
+            : `Lỗi: ${err.message}`,
+          stage: 'deadlock'
+        });
 
         setTimeout(() => {
           setSimState(prev => ({ ...prev, isActive: false }));
@@ -367,19 +433,41 @@ export default function SeatsPage({ movie, showtime, onBack, onConfirm, concurre
       });
       if (addSqlLog) {
         addSqlLog(`CLIENT: BEGIN TRANSACTION (${txId});`, "query");
-        selectedSeats.forEach(s => {
-          addSqlLog(`CLIENT: SELECT SeatStatus FROM Seat WITH (UPDLOCK) WHERE SeatID = '${s}';`, "lock");
-          addSeatLock(showtime.id, s, txId, 'pending', 600000);
-        });
       }
-
-      await new Promise(resolve => setTimeout(resolve, delay));
       
-      if (addSqlLog) {
-        addSqlLog(`CLIENT: Transaction prepared. Proceeding to checkout.`, "success");
+      try {
+        await bookTicketAPI({
+          showtimeId: showtime.id,
+          seats: selectedSeats,
+          movieTitle: movie.titleVi || movie.title,
+          moviePoster: movie.poster,
+          cinemaName: cinema?.name || "CineStar Cinema",
+          showtimeDate: showtime.date,
+          showtimeTime: showtime.time,
+          totalPrice: totalPrice,
+          paymentMethod: "Ví điện tử MoMo",
+          userEmail: userEmail || "khach@gmail.com",
+          isolationLevel: concurrencyConfig?.isolationLevel,
+          useLockFix: concurrencyConfig?.useLockFix,
+          latencyMs: delay
+        });
+        
+        if (addSqlLog) {
+          addSqlLog(`CLIENT: Transaction prepared. Proceeding to checkout.`, "success");
+        }
+        setSimState({ isActive: false, message: "", stage: 'idle' });
+        onConfirm(selectedSeats, totalPrice, combosList);
+      } catch (err: any) {
+        if (addSqlLog) {
+          addSqlLog(`CLIENT: Lỗi: ${err.message}`, "error");
+        }
+        setSimState({
+          isActive: true,
+          message: `Lỗi giao dịch: ${err.message}`,
+          stage: 'error'
+        });
+        setTimeout(() => setSimState(prev => ({ ...prev, isActive: false })), 3000);
       }
-      setSimState({ isActive: false, message: "", stage: 'idle' });
-      onConfirm(selectedSeats, totalPrice, combosList);
     }
   };
 

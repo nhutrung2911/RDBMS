@@ -208,14 +208,23 @@ export const showtimes: Showtime[] = [
   { id: 8, movieId: 1, cinemaId: 2, date: day1, time: "19:45", hall: "Hall A", type: "standard", availableSeats: 40, totalSeats: 90 },
   { id: 9, movieId: 1, cinemaId: 3, date: day2, time: "11:00", hall: "Hall X", type: "imax", availableSeats: 20, totalSeats: 150 },
   { id: 10, movieId: 1, cinemaId: 3, date: day0, time: "16:00", hall: "Hall Y", type: "4dx", availableSeats: 38, totalSeats: 60 },
-  { id: 11, movieId: 2, cinemaId: 1, date: day0, time: "10:30", hall: "Hall 2", type: "standard", availableSeats: 70, totalSeats: 100 },
+  { id: 11, movieId: 2, cinemaId: 1, date: day0, time: "10:00", hall: "Hall 2", type: "standard", availableSeats: 70, totalSeats: 100 },
   { id: 12, movieId: 2, cinemaId: 1, date: day1, time: "14:00", hall: "Hall 3", type: "4dx", availableSeats: 25, totalSeats: 80 },
   { id: 13, movieId: 2, cinemaId: 1, date: day2, time: "17:45", hall: "Hall 1", type: "imax", availableSeats: 50, totalSeats: 120 },
   { id: 14, movieId: 3, cinemaId: 2, date: day0, time: "09:00", hall: "Hall A", type: "standard", availableSeats: 80, totalSeats: 90 },
   { id: 15, movieId: 3, cinemaId: 2, date: day1, time: "11:30", hall: "Hall B", type: "standard", availableSeats: 65, totalSeats: 90 },
-  { id: 16, movieId: 3, cinemaId: 1, date: day0, time: "14:15", hall: "Hall 2", type: "standard", availableSeats: 88, totalSeats: 100 },
+  { id: 16, movieId: 3, cinemaId: 1, date: day0, time: "15:30", hall: "Hall 2", type: "standard", availableSeats: 88, totalSeats: 100 },
   { id: 17, movieId: 3, cinemaId: 1, date: day1, time: "16:45", hall: "Hall 3", type: "standard", availableSeats: 70, totalSeats: 100 },
+  { id: 18, movieId: 4, cinemaId: 4, date: day0, time: "14:00", hall: "Hall I", type: "standard", availableSeats: 120, totalSeats: 120 },
+  { id: 19, movieId: 4, cinemaId: 4, date: day1, time: "16:30", hall: "Hall II", type: "standard", availableSeats: 120, totalSeats: 120 },
+  { id: 20, movieId: 4, cinemaId: 5, date: day0, time: "19:00", hall: "Hall Alpha", type: "standard", availableSeats: 120, totalSeats: 120 },
+  { id: 21, movieId: 4, cinemaId: 6, date: day1, time: "20:00", hall: "Hall Gold", type: "standard", availableSeats: 120, totalSeats: 120 },
+  { id: 22, movieId: 5, cinemaId: 4, date: day0, time: "11:15", hall: "Hall II", type: "standard", availableSeats: 120, totalSeats: 120 },
+  { id: 23, movieId: 5, cinemaId: 5, date: day1, time: "13:30", hall: "Hall Beta", type: "standard", availableSeats: 120, totalSeats: 120 },
+  { id: 24, movieId: 5, cinemaId: 6, date: day0, time: "15:45", hall: "Hall Silver", type: "standard", availableSeats: 120, totalSeats: 120 },
+  { id: 25, movieId: 5, cinemaId: 1, date: day2, time: "18:00", hall: "Hall 2", type: "standard", availableSeats: 120, totalSeats: 120 },
 ];
+
 
 export const TICKET_PRICES: Record<string, number> = {
   standard: 90000,

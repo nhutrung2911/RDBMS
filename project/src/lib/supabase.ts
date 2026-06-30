@@ -59,6 +59,16 @@ function createMockSupabase() {
         }
       },
       {
+        id: 'user-nguyenvanb',
+        email: 'customer2@gmail.com',
+        password: '123456789',
+        fullName: 'Nguyễn Văn B',
+        user_metadata: {
+          full_name: 'Nguyễn Văn B',
+          role: 'customer'
+        }
+      },
+      {
         id: 'user-customer2',
         email: 'trankhachhang@gmail.com',
         password: 'password123',

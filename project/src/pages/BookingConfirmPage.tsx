@@ -4,8 +4,9 @@ import type { Movie, Showtime } from "../data/movies";
 import { cinemas } from "../data/movies";
 import { 
   saveTicket, loadShowtimes, saveShowtimes, addSeatLock, 
-  clearSeatLocksForTransaction 
+  clearSeatLocksForTransaction, syncWithBackend
 } from "../lib/db";
+import { checkBackendOnline, bookTicketAPI } from "../lib/api";
 
 interface BookingConfirmPageProps {
   movie: Movie;
@@ -397,7 +398,7 @@ export default function BookingConfirmPage({
     }, 1000);
   };
 
-  const handleConfirmPayment = () => {
+  const handleConfirmPayment = async () => {
     if (concurrencyConfig?.devModeEnabled && addSqlLog) {
       addSqlLog(`CLIENT A: Người dùng hoàn tất thanh toán.`, "info");
       addSqlLog(`CLIENT A: UPDATE Seat SET SeatStatus = 'SOLD' WHERE SeatID IN (${selectedSeats.map(s => `'${s}'`).join(', ')});`, "query");
@@ -433,18 +434,41 @@ export default function BookingConfirmPage({
       combos: selectedCombos
     };
 
-    // Save ticket to local db
-    saveTicket(newTicket);
+    try {
+      const online = await checkBackendOnline();
+      if (online) {
+        await bookTicketAPI({
+          showtimeId: showtime.id,
+          seats: selectedSeats,
+          movieTitle: movie.titleVi || movie.title,
+          moviePoster: movie.poster,
+          cinemaName: cinema?.name || "CineStar Cinema",
+          showtimeDate: showtime.date,
+          showtimeTime: showtime.time,
+          totalPrice: total,
+          paymentMethod: newTicket.paymentMethod,
+          userEmail: userEmail || "khach@gmail.com",
+          isolationLevel: concurrencyConfig?.isolationLevel || "READ COMMITTED",
+          useLockFix: concurrencyConfig?.useLockFix || false,
+          latencyMs: 0
+        });
+        await syncWithBackend();
+      } else {
+        // Save ticket to local db
+        saveTicket(newTicket);
 
-    // Decrement showtime's seats
-    const currentShowtimes = loadShowtimes();
-    const idx = currentShowtimes.findIndex(s => s.id === showtime.id);
-    if (idx !== -1) {
-      currentShowtimes[idx].availableSeats = Math.max(0, currentShowtimes[idx].availableSeats - selectedSeats.length);
-      saveShowtimes(currentShowtimes);
+        // Decrement showtime's seats
+        const currentShowtimes = loadShowtimes();
+        const idx = currentShowtimes.findIndex(s => s.id === showtime.id);
+        if (idx !== -1) {
+          currentShowtimes[idx].availableSeats = Math.max(0, currentShowtimes[idx].availableSeats - selectedSeats.length);
+          saveShowtimes(currentShowtimes);
+        }
+      }
+      setStep("success");
+    } catch (err: any) {
+      alert(`Lỗi đặt vé trên SQL Server: ${err.message}`);
     }
-
-    setStep("success");
   };
 
   const combosPrice = selectedCombos.reduce((sum, c) => sum + (c.price * c.quantity), 0);
