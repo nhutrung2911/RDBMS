@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
-import { 
-  LayoutDashboard, Film, Calendar, QrCode, LogOut, Plus, Trash2, Edit2, 
+import {
+  LayoutDashboard, Film, Calendar, QrCode, LogOut, Plus, Trash2, Edit2,
   Search, Check, MapPin, TrendingUp, Ticket, DollarSign, Users, Clock, AlertCircle,
   Monitor, Printer, Layers
 } from "lucide-react";
 import type { Movie, Showtime } from "../data/movies";
 import { cinemas, TICKET_PRICES } from "../data/movies";
-import { 
-  loadMovies, saveMovies, loadShowtimes, saveShowtimes, 
+import {
+  loadMovies, saveMovies, loadShowtimes, saveShowtimes,
   loadTickets, updateTicketStatus, BookedTicket, saveTicket,
   loadRooms, saveRooms, loadSeatPricing, saveSeatPricing, RoomConfig,
   syncWithBackend
@@ -24,8 +24,8 @@ interface AdminPortalPageProps {
 
 type Tab = "dashboard" | "movies" | "showtimes" | "tickets" | "sales" | "customers" | "rooms";
 
-export default function AdminPortalPage({ 
-  userRole: _userRole, onBack, concurrencyConfig, addSqlLog 
+export default function AdminPortalPage({
+  userRole: _userRole, onBack, concurrencyConfig, addSqlLog
 }: AdminPortalPageProps) {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [moviesList, setMoviesList] = useState<Movie[]>([]);
@@ -84,14 +84,14 @@ export default function AdminPortalPage({
   const [showMovieModal, setShowMovieModal] = useState(false);
   const [editingMovie, setEditingMovie] = useState<Movie | null>(null);
   const [movieForm, setMovieForm] = useState<Partial<Movie>>({
-    title: "", titleVi: "", duration: 120, rating: "T16", score: 8.0, 
-    poster: "", backdrop: "", status: "now_showing", releaseDate: "", 
+    title: "", titleVi: "", duration: 120, rating: "T16", score: 8.0,
+    poster: "", backdrop: "", status: "now_showing", releaseDate: "",
     description: "", director: "", cast: [], language: "Phụ đề Tiếng Việt", genre: []
   });
 
   const [showShowtimeModal, setShowShowtimeModal] = useState(false);
   const [showtimeForm, setShowtimeForm] = useState<Partial<Showtime>>({
-    movieId: 1, cinemaId: 1, date: new Date().toISOString().split("T")[0], 
+    movieId: 1, cinemaId: 1, date: new Date().toISOString().split("T")[0],
     time: "18:00", hall: "Hall 1", type: "standard", availableSeats: 100, totalSeats: 100
   });
 
@@ -206,7 +206,7 @@ export default function AdminPortalPage({
     const start = reportStartDate;
     const end = reportEndDate;
     const delay = concurrencyConfig.latencyMs || 1500;
-    
+
     setNonRepResults({
       isActive: true,
       read1: 0,
@@ -274,7 +274,7 @@ export default function AdminPortalPage({
           } else {
             addSqlLog(`CLIENT A: Khóa SHARED LOCK (S) được giải phóng ngay sau khi đọc (READ COMMITTED).`, "info");
           }
-          
+
           if (concurrencyConfig.isolationLevel === "REPEATABLE_READ" || concurrencyConfig.isolationLevel === "SERIALIZABLE") {
             addSqlLog(`CLIENT A: SELECT SUM(TotalPrice) FROM Ticket WHERE BookingTime BETWEEN '${start}' AND '${end}'; (Truy vấn lại lần 2)`, "query");
             addSqlLog(`CLIENT A: Kết quả Đọc lần 2 = ${formatPrice(res.read2)}`, "success");
@@ -308,7 +308,7 @@ export default function AdminPortalPage({
           return ticketDate >= start && ticketDate <= end;
         });
         const initialTotal = initialTickets.reduce((sum, t) => sum + t.totalPrice, 0);
-        
+
         if (addSqlLog) {
           addSqlLog(`CLIENT A: Kết quả Đọc lần 1 = ${formatPrice(initialTotal)}`, "success");
         }
@@ -316,8 +316,8 @@ export default function AdminPortalPage({
         await new Promise(resolve => setTimeout(resolve, delay));
 
         let finalTotal = initialTotal;
-        const isLowIsolation = 
-          concurrencyConfig.isolationLevel === "READ_UNCOMMITTED" || 
+        const isLowIsolation =
+          concurrencyConfig.isolationLevel === "READ_UNCOMMITTED" ||
           concurrencyConfig.isolationLevel === "READ_COMMITTED";
 
         if (isLowIsolation && initialTickets.length > 0) {
@@ -443,7 +443,7 @@ export default function AdminPortalPage({
       return;
     }
     const isMock = !import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL === 'YOUR_SUPABASE_URL';
-    
+
     if (editingCustomer) {
       if (isMock) {
         try {
@@ -664,10 +664,10 @@ export default function AdminPortalPage({
   const handleOpenAddMovie = () => {
     setEditingMovie(null);
     setMovieForm({
-      title: "", titleVi: "", duration: 120, rating: "T16", score: 8.0, 
-      poster: "https://images.pexels.com/photos/7991486/pexels-photo-7991486.jpeg?auto=compress&cs=tinysrgb&w=400&h=600", 
-      backdrop: "https://images.pexels.com/photos/7991486/pexels-photo-7991486.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750", 
-      status: "now_showing", releaseDate: new Date().toISOString().split("T")[0], 
+      title: "", titleVi: "", duration: 120, rating: "T16", score: 8.0,
+      poster: "https://images.pexels.com/photos/7991486/pexels-photo-7991486.jpeg?auto=compress&cs=tinysrgb&w=400&h=600",
+      backdrop: "https://images.pexels.com/photos/7991486/pexels-photo-7991486.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750",
+      status: "now_showing", releaseDate: new Date().toISOString().split("T")[0],
       description: "", director: "", cast: [], language: "Phụ đề Tiếng Việt", genre: ["Action", "Adventure"]
     });
     setShowMovieModal(true);
@@ -731,7 +731,7 @@ export default function AdminPortalPage({
   const handleOpenAddShowtime = () => {
     const defaultMovieId = moviesList[0]?.id || 1;
     setShowtimeForm({
-      movieId: defaultMovieId, cinemaId: 1, date: new Date().toISOString().split("T")[0], 
+      movieId: defaultMovieId, cinemaId: 1, date: new Date().toISOString().split("T")[0],
       time: "18:00", hall: "Hall 1", type: "standard", availableSeats: 100, totalSeats: 100
     });
     setShowShowtimeModal(true);
@@ -828,7 +828,7 @@ export default function AdminPortalPage({
   // Calculate statistics
   const totalRevenue = ticketsList.reduce((sum, t) => sum + t.totalPrice, 0);
   const totalTicketsSold = ticketsList.reduce((sum, t) => sum + t.seats.length, 0);
-  
+
   // Group revenue by movie
   const revenueByMovieMap = ticketsList.reduce((acc, t) => {
     acc[t.movieTitle] = (acc[t.movieTitle] || 0) + t.totalPrice;
@@ -879,7 +879,7 @@ export default function AdminPortalPage({
   return (
     <div className="min-h-screen bg-zinc-950 pt-20 pb-16 flex flex-col">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full flex-1 flex flex-col md:flex-row gap-6">
-        
+
         {/* Sidebar Nav */}
         <aside className="w-full md:w-64 flex-shrink-0">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sticky top-24">
@@ -900,11 +900,10 @@ export default function AdminPortalPage({
                   <button
                     key={item.id}
                     onClick={() => setActiveTab(item.id as Tab)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                      activeTab === item.id
-                        ? "bg-red-600 text-white shadow-lg shadow-red-600/10"
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
-                    }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === item.id
+                      ? "bg-red-600 text-white shadow-lg shadow-red-600/10"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                      }`}
                   >
                     <Icon className="w-4 h-4" />
                     {item.label}
@@ -925,41 +924,41 @@ export default function AdminPortalPage({
 
         {/* Content Area */}
         <main className="flex-1 min-w-0">
-          
+
           {/* DASHBOARD TAB */}
           {activeTab === "dashboard" && (
             <div className="space-y-6">
               <h1 className="text-2xl font-bold text-white">Báo Cáo & Thống Kê</h1>
-              
+
               {/* Stat Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard 
-                  icon={<DollarSign className="w-5 h-5 text-emerald-400" />} 
+                <StatCard
+                  icon={<DollarSign className="w-5 h-5 text-emerald-400" />}
                   bg="bg-emerald-500/10 border-emerald-500/20"
-                  label="Doanh Thu Lịch Chiếu" 
-                  value={formatPrice(totalRevenue + 12450000)} 
-                  desc="+15.2% so với tháng trước" 
+                  label="Doanh Thu Lịch Chiếu"
+                  value={formatPrice(totalRevenue + 12450000)}
+                  desc="+15.2% so với tháng trước"
                 />
-                <StatCard 
-                  icon={<Ticket className="w-5 h-5 text-red-400" />} 
+                <StatCard
+                  icon={<Ticket className="w-5 h-5 text-red-400" />}
                   bg="bg-red-500/10 border-red-500/20"
-                  label="Tổng Số Vé Bán Ra" 
-                  value={(totalTicketsSold + 138).toString()} 
-                  desc="Trung bình 12 vé/suất" 
+                  label="Tổng Số Vé Bán Ra"
+                  value={(totalTicketsSold + 138).toString()}
+                  desc="Trung bình 12 vé/suất"
                 />
-                <StatCard 
-                  icon={<Film className="w-5 h-5 text-amber-400" />} 
+                <StatCard
+                  icon={<Film className="w-5 h-5 text-amber-400" />}
                   bg="bg-amber-500/10 border-amber-500/20"
-                  label="Phim Đang Đặt Vé" 
-                  value={moviesList.length.toString()} 
-                  desc={`${moviesList.filter(m => m.status === 'now_showing').length} phim đang chiếu`} 
+                  label="Phim Đang Đặt Vé"
+                  value={moviesList.length.toString()}
+                  desc={`${moviesList.filter(m => m.status === 'now_showing').length} phim đang chiếu`}
                 />
-                <StatCard 
-                  icon={<Users className="w-5 h-5 text-purple-400" />} 
+                <StatCard
+                  icon={<Users className="w-5 h-5 text-purple-400" />}
                   bg="bg-purple-500/10 border-purple-500/20"
-                  label="Tổng Số Khách Hàng" 
-                  value="1,248" 
-                  desc="Hoạt động thường xuyên" 
+                  label="Tổng Số Khách Hàng"
+                  value="1,248"
+                  desc="Hoạt động thường xuyên"
                 />
               </div>
 
@@ -1008,7 +1007,7 @@ export default function AdminPortalPage({
                           handleNonRepeatableReadReport();
                         } else {
                           setNonRepResults(prev => ({ ...prev, isActive: false }));
-                          
+
                           const start = reportStartDate;
                           const end = reportEndDate;
 
@@ -1018,7 +1017,7 @@ export default function AdminPortalPage({
                           });
 
                           const groups: Record<string, { label: string; revenue: number; ticketsCount: number }> = {};
-                          
+
                           filtered.forEach(t => {
                             let label = "";
                             if (reportType === "date") label = t.bookedAt.substring(0, 10);
@@ -1067,7 +1066,7 @@ export default function AdminPortalPage({
                     <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
                     Kịch Bản Giả Lập Non-repeatable Read
                   </h3>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                     <div className="bg-zinc-950 p-4 border border-zinc-850 rounded-xl space-y-1">
                       <span className="text-gray-500 text-xs uppercase font-sans">Lần Đọc 1 (Transaction A)</span>
@@ -1085,7 +1084,7 @@ export default function AdminPortalPage({
                       {nonRepResults.stage === 'reading1' && <span className="text-zinc-650 text-xs">Đang chờ khởi chạy...</span>}
                       {nonRepResults.stage === 'background_change' && (
                         <span className="text-amber-400 text-xs font-semibold animate-pulse text-center">
-                          {concurrencyConfig.isolationLevel === 'READ_COMMITTED' 
+                          {concurrencyConfig.isolationLevel === 'READ_COMMITTED'
                             ? "Đang HỦY VÉ (Trị giá -1.200.000đ)..."
                             : "BỊ CHẶN HỦY VÉ (Chờ khóa)..."
                           }
@@ -1115,13 +1114,12 @@ export default function AdminPortalPage({
                     </div>
                   </div>
 
-                  <div className={`p-3 rounded-xl border text-[11px] font-medium leading-relaxed ${
-                    nonRepResults.stage === 'complete'
-                      ? nonRepResults.read1 !== nonRepResults.read2
-                        ? 'bg-red-950/20 border-red-500/20 text-red-400'
-                        : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
-                      : 'bg-zinc-950 border-zinc-850 text-gray-400'
-                  }`}>
+                  <div className={`p-3 rounded-xl border text-[11px] font-medium leading-relaxed ${nonRepResults.stage === 'complete'
+                    ? nonRepResults.read1 !== nonRepResults.read2
+                      ? 'bg-red-950/20 border-red-500/20 text-red-400'
+                      : 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
+                    : 'bg-zinc-950 border-zinc-850 text-gray-400'
+                    }`}>
                     {nonRepResults.stage === 'reading1' && "Hệ thống đang mở Transaction A và thực hiện Đọc lần 1..."}
                     {nonRepResults.stage === 'background_change' && "Giao dịch B chạy ngầm bắt đầu thực thi xóa một hóa đơn để tạo tương tranh..."}
                     {nonRepResults.stage === 'reading2' && "Transaction A thực hiện Đọc lần 2 tại thời điểm hiện tại..."}
@@ -1187,8 +1185,8 @@ export default function AdminPortalPage({
                               <span className="text-white font-semibold">{formatPrice(row.revenue)}</span>
                             </div>
                             <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-                              <div 
-                                className="bg-red-650 h-full rounded-full transition-all duration-500" 
+                              <div
+                                className="bg-red-650 h-full rounded-full transition-all duration-500"
                                 style={{ width: `${percent}%` }}
                               />
                             </div>
@@ -1203,7 +1201,7 @@ export default function AdminPortalPage({
               {/* Default Overview (If not searched yet) */}
               {!hasSearchedReport && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  
+
                   {/* Revenue by Movie */}
                   <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
                     <div className="flex items-center gap-2 mb-6">
@@ -1223,8 +1221,8 @@ export default function AdminPortalPage({
                                 <span className="text-white font-semibold">{formatPrice(item.revenue)}</span>
                               </div>
                               <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-                                <div 
-                                  className="bg-red-600 h-full rounded-full transition-all duration-1000" 
+                                <div
+                                  className="bg-red-600 h-full rounded-full transition-all duration-1000"
                                   style={{ width: `${percent}%` }}
                                 />
                               </div>
@@ -1246,9 +1244,8 @@ export default function AdminPortalPage({
                       {ticketsList.length > 0 ? (
                         ticketsList.slice(0, 5).map((t, idx) => (
                           <div key={idx} className="flex gap-3 text-xs border-b border-zinc-800 pb-3 last:border-0 last:pb-0">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-bold ${
-                              t.status === "used" ? "bg-zinc-800 text-gray-500" : "bg-red-950 text-red-400"
-                            }`}>
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-bold ${t.status === "used" ? "bg-zinc-800 text-gray-500" : "bg-red-950 text-red-400"
+                              }`}>
                               Ticket
                             </div>
                             <div className="min-w-0 flex-1">
@@ -1258,9 +1255,8 @@ export default function AdminPortalPage({
                             </div>
                             <div className="text-right">
                               <span className="text-white font-bold">{formatPrice(t.totalPrice)}</span>
-                              <span className={`block mt-1 text-[10px] ${
-                                t.status === "used" ? "text-gray-500" : "text-green-500"
-                              }`}>
+                              <span className={`block mt-1 text-[10px] ${t.status === "used" ? "text-gray-500" : "text-green-500"
+                                }`}>
                                 {t.status === "used" ? "Đã dùng" : "Chưa dùng"}
                               </span>
                             </div>
@@ -1320,11 +1316,10 @@ export default function AdminPortalPage({
                           <td className="px-6 py-4 font-medium text-gray-300">{movie.director}</td>
                           <td className="px-6 py-4">{movie.duration} phút</td>
                           <td className="px-6 py-4">
-                            <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                              movie.status === 'now_showing' 
-                                ? 'bg-green-600/10 text-green-400 border border-green-500/20' 
-                                : 'bg-amber-600/10 text-amber-400 border border-amber-500/20'
-                            }`}>
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${movie.status === 'now_showing'
+                              ? 'bg-green-600/10 text-green-400 border border-green-500/20'
+                              : 'bg-amber-600/10 text-amber-400 border border-amber-500/20'
+                              }`}>
                               {movie.status === 'now_showing' ? 'Đang Chiếu' : 'Sắp Chiếu'}
                             </span>
                           </td>
@@ -1433,7 +1428,7 @@ export default function AdminPortalPage({
               <h1 className="text-2xl font-bold text-white">Soát Vé & Giao Dịch</h1>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
+
                 {/* Simulated Scanner (Left) */}
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6">
                   <div>
@@ -1476,11 +1471,10 @@ export default function AdminPortalPage({
                           <h4 className="text-white font-bold text-base leading-tight">{searchTicketResult.movieTitle}</h4>
                           <p className="text-gray-400 text-xs mt-1.5">{searchTicketResult.cinemaName} • {searchTicketResult.hall}</p>
                         </div>
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                          searchTicketResult.status === "used" 
-                            ? "bg-zinc-800 text-gray-500 border border-zinc-700" 
-                            : "bg-green-600/10 text-green-400 border border-green-500/20"
-                        }`}>
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${searchTicketResult.status === "used"
+                          ? "bg-zinc-800 text-gray-500 border border-zinc-700"
+                          : "bg-green-600/10 text-green-400 border border-green-500/20"
+                          }`}>
                           {searchTicketResult.status === "used" ? "Đã sử dụng" : "Hợp lệ"}
                         </span>
                       </div>
@@ -1527,16 +1521,15 @@ export default function AdminPortalPage({
                   <div className="flex-1 overflow-y-auto space-y-3 max-h-[350px]">
                     {ticketsList.length > 0 ? (
                       ticketsList.map((t, idx) => (
-                        <div 
-                          key={idx} 
+                        <div
+                          key={idx}
                           onClick={() => {
                             setSearchTicketQuery(t.id);
                             setSearchTicketResult(t);
                             setTicketSearchError("");
                           }}
-                          className={`p-3 bg-zinc-950 border rounded-xl hover:border-red-500 transition-colors flex justify-between items-center cursor-pointer ${
-                            searchTicketResult?.id === t.id ? "border-red-500" : "border-zinc-800"
-                          }`}
+                          className={`p-3 bg-zinc-950 border rounded-xl hover:border-red-500 transition-colors flex justify-between items-center cursor-pointer ${searchTicketResult?.id === t.id ? "border-red-500" : "border-zinc-800"
+                            }`}
                         >
                           <div>
                             <p className="text-white font-bold text-sm truncate max-w-xs">{t.movieTitle}</p>
@@ -1544,11 +1537,10 @@ export default function AdminPortalPage({
                           </div>
                           <div className="text-right flex flex-col items-end gap-1">
                             <span className="text-white font-bold text-sm">{formatPrice(t.totalPrice)}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              t.status === "used" 
-                                ? "bg-zinc-800 text-gray-500" 
-                                : "bg-green-600/10 text-green-400 border border-green-500/10"
-                            }`}>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.status === "used"
+                              ? "bg-zinc-800 text-gray-500"
+                              : "bg-green-600/10 text-green-400 border border-green-500/10"
+                              }`}>
                               {t.status === "used" ? "Đã dùng" : "Chưa dùng"}
                             </span>
                           </div>
@@ -1583,7 +1575,7 @@ export default function AdminPortalPage({
                       <span className="w-1.5 h-4 bg-red-600 rounded-full" />
                       1. Tra cứu Lịch chiếu
                     </h3>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {/* Chọn phim */}
                       <div>
@@ -1647,11 +1639,11 @@ export default function AdminPortalPage({
                         {(() => {
                           const baseShowtimes = showtimesList.filter(
                             s => s.movieId === selectedSalesMovie.id &&
-                                 s.cinemaId === selectedSalesCinema.id &&
-                                 s.date === selectedSalesDate
+                              s.cinemaId === selectedSalesCinema.id &&
+                              s.date === selectedSalesDate
                           );
                           const showtimes = [...baseShowtimes, ...phantomShowtimes];
-                          
+
                           if (phantomActive) {
                             return (
                               <div className="flex flex-col items-center justify-center py-6 gap-3">
@@ -1660,7 +1652,7 @@ export default function AdminPortalPage({
                               </div>
                             );
                           }
-                          
+
                           if (showtimes.length === 0) {
                             return (
                               <p className="text-gray-550 text-sm italic py-2">Không tìm thấy suất chiếu nào phù hợp.</p>
@@ -1676,11 +1668,10 @@ export default function AdminPortalPage({
                                     setSelectedSalesShowtime(st);
                                     setSalesSelectedSeats([]);
                                   }}
-                                  className={`p-3 rounded-xl border text-left transition-all ${
-                                    selectedSalesShowtime?.id === st.id
-                                      ? "bg-red-600/10 border-red-500 shadow-md shadow-red-500/5"
-                                      : "bg-zinc-950 border-zinc-800 hover:border-zinc-700"
-                                  }`}
+                                  className={`p-3 rounded-xl border text-left transition-all ${selectedSalesShowtime?.id === st.id
+                                    ? "bg-red-600/10 border-red-500 shadow-md shadow-red-500/5"
+                                    : "bg-zinc-950 border-zinc-800 hover:border-zinc-700"
+                                    }`}
                                 >
                                   <div className="flex items-center justify-between">
                                     <span className="text-white font-bold text-base">{st.time}</span>
@@ -1731,7 +1722,7 @@ export default function AdminPortalPage({
                           {(() => {
                             let rows = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
                             let cols = Array.from({ length: 12 }, (_, i) => i + 1);
-                            
+
                             let matchingRoom: any = null;
                             if (selectedSalesShowtime) {
                               matchingRoom = roomsList.find((r) => r.name === selectedSalesShowtime.hall && r.cinemaId === selectedSalesShowtime.cinemaId);
@@ -1744,11 +1735,11 @@ export default function AdminPortalPage({
                               cols = Array.from({ length: matchingRoom.cols }, (_, i) => i + 1);
                               customSeats = matchingRoom.seats || {};
                             }
-                            
+
                             // Lấy danh sách ghế đã bán cho suất chiếu này
                             const soldSeatsForShowtime = new Set<string>();
                             ticketsList
-                              .filter(t => 
+                              .filter(t =>
                                 t.movieId === selectedSalesMovie.id &&
                                 t.cinemaName === selectedSalesCinema?.name &&
                                 t.showtimeDate === selectedSalesShowtime.date &&
@@ -1759,11 +1750,11 @@ export default function AdminPortalPage({
 
                             // Ghế đã bán mặc định để sinh động
                             const mockSold = new Set(["B5", "B6", "D4", "D5", "F7", "F8", "G3", "H10", "H11"]);
-                            
+
                             return rows.map(row => {
                               const vipRows = new Set(["F", "G", "H"]);
                               const coupleRow = "J";
-                              
+
                               return (
                                 <div key={row} className="flex items-center gap-1.5">
                                   <span className="w-5 text-center text-gray-600 text-xs font-mono font-bold">{row}</span>
@@ -1772,7 +1763,7 @@ export default function AdminPortalPage({
                                       const seatId = `${row}${col}`;
                                       const isSold = soldSeatsForShowtime.has(seatId) || mockSold.has(seatId);
                                       const isSelected = salesSelectedSeats.includes(seatId);
-                                      
+
                                       let seatType: "standard" | "vip" | "couple" = "standard";
                                       if (matchingRoom) {
                                         seatType = customSeats[seatId] || "standard";
@@ -1925,7 +1916,7 @@ export default function AdminPortalPage({
                     {/* Chi phí & Nút xác nhận */}
                     {(() => {
                       const basePrice = selectedSalesShowtime ? TICKET_PRICES[selectedSalesShowtime.type] : 0;
-                      
+
                       let matchingRoom: any = null;
                       if (selectedSalesShowtime) {
                         matchingRoom = roomsList.find((r) => r.name === selectedSalesShowtime.hall && r.cinemaId === selectedSalesShowtime.cinemaId);
@@ -1948,7 +1939,7 @@ export default function AdminPortalPage({
 
                       const handleConfirmSales = () => {
                         if (!selectedSalesMovie || !selectedSalesShowtime || salesSelectedSeats.length === 0) return;
-                        
+
                         const rand = Math.random().toString(36).substring(2, 7).toUpperCase();
                         const ticketId = `CNS${rand}`;
 
@@ -1963,11 +1954,11 @@ export default function AdminPortalPage({
                           hall: selectedSalesShowtime.hall,
                           seats: salesSelectedSeats,
                           totalPrice: total,
-                          paymentMethod: salesPaymentMethod === "cash" 
-                            ? "Tiền mặt tại quầy" 
+                          paymentMethod: salesPaymentMethod === "cash"
+                            ? "Tiền mặt tại quầy"
                             : salesPaymentMethod === "card"
-                            ? "Thẻ ngân hàng (POS)"
-                            : "Chuyển khoản QR",
+                              ? "Thẻ ngân hàng (POS)"
+                              : "Chuyển khoản QR",
                           bookedAt: new Date().toISOString().replace("T", " ").substring(0, 16),
                           status: "used",
                           userEmail: "counter_sale@cinestar.vn",
@@ -1981,7 +1972,7 @@ export default function AdminPortalPage({
                         }
 
                         saveTicket(newTicket);
-                        
+
                         setSalesSelectedSeats([]);
                         refreshDB();
                         setPrintedTicket(newTicket);
@@ -1993,16 +1984,15 @@ export default function AdminPortalPage({
                             <span className="text-gray-400 text-xs font-semibold uppercase">Tổng chi phí:</span>
                             <span className="text-white font-extrabold text-xl">{formatPrice(total)}</span>
                           </div>
-                          
+
                           <button
                             type="button"
                             disabled={!selectedSalesShowtime || salesSelectedSeats.length === 0}
                             onClick={handleConfirmSales}
-                            className={`w-full font-bold py-3.5 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.98] font-sans ${
-                              selectedSalesShowtime && salesSelectedSeats.length > 0
-                                ? "bg-emerald-650 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-600/10 cursor-pointer"
-                                : "bg-zinc-800 text-gray-500 cursor-not-allowed border border-zinc-850"
-                            }`}
+                            className={`w-full font-bold py-3.5 px-4 rounded-xl text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.98] font-sans ${selectedSalesShowtime && salesSelectedSeats.length > 0
+                              ? "bg-emerald-650 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-600/10 cursor-pointer"
+                              : "bg-zinc-800 text-gray-500 cursor-not-allowed border border-zinc-850"
+                              }`}
                           >
                             <Check className="w-4 h-4" />
                             Xác Nhận & In Vé Giấy
@@ -2093,11 +2083,10 @@ export default function AdminPortalPage({
                             <td className="px-6 py-4 font-mono text-zinc-400">{c.phone}</td>
                             <td className="px-6 py-4 font-mono text-zinc-400">{c.email}</td>
                             <td className="px-6 py-4">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                c.role === "admin" 
-                                  ? "bg-red-500/10 text-red-400 border border-red-500/10" 
-                                  : "bg-zinc-800 text-gray-400 border border-zinc-700"
-                              }`}>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${c.role === "admin"
+                                ? "bg-red-500/10 text-red-400 border border-red-500/10"
+                                : "bg-zinc-800 text-gray-400 border border-zinc-700"
+                                }`}>
                                 {c.role === "admin" ? "Quản trị" : "Khách hàng"}
                               </span>
                             </td>
@@ -2305,81 +2294,81 @@ export default function AdminPortalPage({
             <form onSubmit={handleSaveMovie} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div>
                 <label className="block text-gray-400 mb-1">Tên Tiếng Anh</label>
-                <input 
+                <input
                   type="text" required
-                  value={movieForm.title || ""} 
-                  onChange={e => setMovieForm({...movieForm, title: e.target.value})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white" 
+                  value={movieForm.title || ""}
+                  onChange={e => setMovieForm({ ...movieForm, title: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-gray-400 mb-1">Tên Tiếng Việt</label>
-                <input 
+                <input
                   type="text" required
-                  value={movieForm.titleVi || ""} 
-                  onChange={e => setMovieForm({...movieForm, titleVi: e.target.value})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white" 
+                  value={movieForm.titleVi || ""}
+                  onChange={e => setMovieForm({ ...movieForm, titleVi: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-gray-400 mb-1">Thể Loại (Cách nhau bởi dấu phẩy)</label>
-                <input 
+                <input
                   type="text" required
-                  value={Array.isArray(movieForm.genre) ? movieForm.genre.join(", ") : movieForm.genre || ""} 
-                  onChange={e => setMovieForm({...movieForm, genre: e.target.value as any})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white" 
+                  value={Array.isArray(movieForm.genre) ? movieForm.genre.join(", ") : movieForm.genre || ""}
+                  onChange={e => setMovieForm({ ...movieForm, genre: e.target.value as any })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-gray-400 mb-1">Thời Lượng (Phút)</label>
-                <input 
+                <input
                   type="number" required
-                  value={movieForm.duration || ""} 
-                  onChange={e => setMovieForm({...movieForm, duration: Number(e.target.value)})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white" 
+                  value={movieForm.duration || ""}
+                  onChange={e => setMovieForm({ ...movieForm, duration: Number(e.target.value) })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-gray-400 mb-1">Đạo Diễn</label>
-                <input 
+                <input
                   type="text" required
-                  value={movieForm.director || ""} 
-                  onChange={e => setMovieForm({...movieForm, director: e.target.value})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white" 
+                  value={movieForm.director || ""}
+                  onChange={e => setMovieForm({ ...movieForm, director: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-gray-400 mb-1">Diễn Viên (Cách nhau bởi dấu phẩy)</label>
-                <input 
+                <input
                   type="text" required
-                  value={Array.isArray(movieForm.cast) ? movieForm.cast.join(", ") : movieForm.cast || ""} 
-                  onChange={e => setMovieForm({...movieForm, cast: e.target.value as any})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white" 
+                  value={Array.isArray(movieForm.cast) ? movieForm.cast.join(", ") : movieForm.cast || ""}
+                  onChange={e => setMovieForm({ ...movieForm, cast: e.target.value as any })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-gray-400 mb-1">Ảnh Poster URL</label>
-                <input 
+                <input
                   type="text" required
-                  value={movieForm.poster || ""} 
-                  onChange={e => setMovieForm({...movieForm, poster: e.target.value})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white" 
+                  value={movieForm.poster || ""}
+                  onChange={e => setMovieForm({ ...movieForm, poster: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-gray-400 mb-1">Ảnh Backdrop URL</label>
-                <input 
+                <input
                   type="text" required
-                  value={movieForm.backdrop || ""} 
-                  onChange={e => setMovieForm({...movieForm, backdrop: e.target.value})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white" 
+                  value={movieForm.backdrop || ""}
+                  onChange={e => setMovieForm({ ...movieForm, backdrop: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>
               <div>
                 <label className="block text-gray-400 mb-1">Trạng Thái</label>
-                <select 
+                <select
                   value={movieForm.status || "now_showing"}
-                  onChange={e => setMovieForm({...movieForm, status: e.target.value as any})}
+                  onChange={e => setMovieForm({ ...movieForm, status: e.target.value as any })}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 >
                   <option value="now_showing">Đang Chiếu (Now Showing)</option>
@@ -2388,20 +2377,20 @@ export default function AdminPortalPage({
               </div>
               <div>
                 <label className="block text-gray-400 mb-1">Ngày Phát Hành</label>
-                <input 
+                <input
                   type="date" required
-                  value={movieForm.releaseDate || ""} 
-                  onChange={e => setMovieForm({...movieForm, releaseDate: e.target.value})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white" 
+                  value={movieForm.releaseDate || ""}
+                  onChange={e => setMovieForm({ ...movieForm, releaseDate: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-gray-400 mb-1">Mô Tả Phim</label>
-                <textarea 
+                <textarea
                   required rows={3}
-                  value={movieForm.description || ""} 
-                  onChange={e => setMovieForm({...movieForm, description: e.target.value})}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white resize-none" 
+                  value={movieForm.description || ""}
+                  onChange={e => setMovieForm({ ...movieForm, description: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white resize-none"
                 />
               </div>
 
@@ -2439,7 +2428,7 @@ export default function AdminPortalPage({
                 <label className="block text-gray-400 mb-1">Chọn Phim</label>
                 <select
                   value={showtimeForm.movieId}
-                  onChange={e => setShowtimeForm({...showtimeForm, movieId: Number(e.target.value)})}
+                  onChange={e => setShowtimeForm({ ...showtimeForm, movieId: Number(e.target.value) })}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 >
                   {moviesList.map(m => (
@@ -2452,7 +2441,7 @@ export default function AdminPortalPage({
                 <label className="block text-gray-400 mb-1">Chọn Rạp</label>
                 <select
                   value={showtimeForm.cinemaId}
-                  onChange={e => setShowtimeForm({...showtimeForm, cinemaId: Number(e.target.value)})}
+                  onChange={e => setShowtimeForm({ ...showtimeForm, cinemaId: Number(e.target.value) })}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                 >
                   {cinemas.map(c => (
@@ -2467,7 +2456,7 @@ export default function AdminPortalPage({
                   <input
                     type="date" required
                     value={showtimeForm.date}
-                    onChange={e => setShowtimeForm({...showtimeForm, date: e.target.value})}
+                    onChange={e => setShowtimeForm({ ...showtimeForm, date: e.target.value })}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                   />
                 </div>
@@ -2476,7 +2465,7 @@ export default function AdminPortalPage({
                   <input
                     type="time" required
                     value={showtimeForm.time}
-                    onChange={e => setShowtimeForm({...showtimeForm, time: e.target.value})}
+                    onChange={e => setShowtimeForm({ ...showtimeForm, time: e.target.value })}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                   />
                 </div>
@@ -2488,7 +2477,7 @@ export default function AdminPortalPage({
                   <input
                     type="text" required
                     value={showtimeForm.hall}
-                    onChange={e => setShowtimeForm({...showtimeForm, hall: e.target.value})}
+                    onChange={e => setShowtimeForm({ ...showtimeForm, hall: e.target.value })}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                   />
                 </div>
@@ -2497,7 +2486,7 @@ export default function AdminPortalPage({
                   <input
                     type="number" required
                     value={showtimeForm.totalSeats}
-                    onChange={e => setShowtimeForm({...showtimeForm, totalSeats: Number(e.target.value)})}
+                    onChange={e => setShowtimeForm({ ...showtimeForm, totalSeats: Number(e.target.value) })}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
                   />
                 </div>
@@ -2507,7 +2496,7 @@ export default function AdminPortalPage({
                 <label className="block text-gray-400 mb-1">Định Dạng Suất Chiếu</label>
                 <select
                   value={showtimeForm.type}
-                  onChange={e => setShowtimeForm({...showtimeForm, type: e.target.value as any})}
+                  onChange={e => setShowtimeForm({ ...showtimeForm, type: e.target.value as any })}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white font-semibold"
                 >
                   <option value="standard">Standard (Thường)</option>
@@ -2554,7 +2543,7 @@ export default function AdminPortalPage({
                 <input
                   type="text" required
                   value={customerForm.fullName}
-                  onChange={e => setCustomerForm({...customerForm, fullName: e.target.value})}
+                  onChange={e => setCustomerForm({ ...customerForm, fullName: e.target.value })}
                   placeholder="Nguyễn Văn A"
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50"
                 />
@@ -2565,7 +2554,7 @@ export default function AdminPortalPage({
                 <input
                   type="text" required
                   value={customerForm.phone}
-                  onChange={e => setCustomerForm({...customerForm, phone: e.target.value})}
+                  onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })}
                   placeholder="0912345678"
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono"
                 />
@@ -2577,7 +2566,7 @@ export default function AdminPortalPage({
                   type="email" required
                   value={customerForm.email}
                   disabled={!!editingCustomer}
-                  onChange={e => setCustomerForm({...customerForm, email: e.target.value})}
+                  onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })}
                   placeholder="email@example.com"
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono disabled:opacity-50 disabled:cursor-not-allowed"
                 />
@@ -2589,7 +2578,7 @@ export default function AdminPortalPage({
                   <input
                     type="password" required
                     value={customerForm.password}
-                    onChange={e => setCustomerForm({...customerForm, password: e.target.value})}
+                    onChange={e => setCustomerForm({ ...customerForm, password: e.target.value })}
                     placeholder="Mật khẩu từ 6 ký tự trở lên"
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50 font-mono"
                   />
@@ -2628,7 +2617,7 @@ export default function AdminPortalPage({
             </div>
 
             <form onSubmit={handleSaveRoom} className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-sm font-sans">
-              
+
               {/* Left Column: Properties (4 cols) */}
               <div className="lg:col-span-4 space-y-4">
                 <div>
@@ -2636,7 +2625,7 @@ export default function AdminPortalPage({
                   <input
                     type="text" required
                     value={roomForm.name}
-                    onChange={e => setRoomForm({...roomForm, name: e.target.value})}
+                    onChange={e => setRoomForm({ ...roomForm, name: e.target.value })}
                     placeholder="Ví dụ: Hall Premium, Phòng 5..."
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-red-500/50"
                   />
@@ -2646,7 +2635,7 @@ export default function AdminPortalPage({
                   <label className="block text-gray-400 mb-1.5 font-medium">Thuộc Rạp Chiếu</label>
                   <select
                     value={roomForm.cinemaId}
-                    onChange={e => setRoomForm({...roomForm, cinemaId: Number(e.target.value)})}
+                    onChange={e => setRoomForm({ ...roomForm, cinemaId: Number(e.target.value) })}
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-red-500/50"
                   >
                     {cinemas.map(c => (
@@ -2672,7 +2661,7 @@ export default function AdminPortalPage({
                             if (!newSeats[sid]) newSeats[sid] = "standard";
                           }
                         }
-                        setRoomForm({...roomForm, rows: r, seats: newSeats});
+                        setRoomForm({ ...roomForm, rows: r, seats: newSeats });
                       }}
                       className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-red-500/50 font-mono"
                     />
@@ -2693,7 +2682,7 @@ export default function AdminPortalPage({
                             if (!newSeats[sid]) newSeats[sid] = "standard";
                           }
                         }
-                        setRoomForm({...roomForm, cols: colVal, seats: newSeats});
+                        setRoomForm({ ...roomForm, cols: colVal, seats: newSeats });
                       }}
                       className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-red-500/50 font-mono"
                     />
@@ -2706,11 +2695,10 @@ export default function AdminPortalPage({
                     <button
                       type="button"
                       onClick={() => setActiveBrush("standard")}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                        activeBrush === "standard"
-                          ? "bg-slate-700 text-white border-slate-500 shadow-md shadow-slate-700/20"
-                          : "bg-zinc-850 hover:bg-zinc-800 text-slate-300 border-zinc-800"
-                      }`}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${activeBrush === "standard"
+                        ? "bg-slate-700 text-white border-slate-500 shadow-md shadow-slate-700/20"
+                        : "bg-zinc-850 hover:bg-zinc-800 text-slate-300 border-zinc-800"
+                        }`}
                     >
                       <span className="w-4 h-4 rounded bg-slate-650 inline-block border border-slate-500" />
                       Ghế Thường (Standard)
@@ -2719,11 +2707,10 @@ export default function AdminPortalPage({
                     <button
                       type="button"
                       onClick={() => setActiveBrush("vip")}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                        activeBrush === "vip"
-                          ? "bg-amber-600/20 text-amber-400 border-amber-500/40 shadow-md shadow-amber-600/10"
-                          : "bg-zinc-850 hover:bg-zinc-800 text-amber-400/80 border-zinc-800"
-                      }`}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${activeBrush === "vip"
+                        ? "bg-amber-600/20 text-amber-400 border-amber-500/40 shadow-md shadow-amber-600/10"
+                        : "bg-zinc-850 hover:bg-zinc-800 text-amber-400/80 border-zinc-800"
+                        }`}
                     >
                       <span className="w-4 h-4 rounded bg-amber-600 inline-block border border-amber-500" />
                       Ghế VIP (Surcharge)
@@ -2732,11 +2719,10 @@ export default function AdminPortalPage({
                     <button
                       type="button"
                       onClick={() => setActiveBrush("couple")}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                        activeBrush === "couple"
-                          ? "bg-rose-700/20 text-rose-400 border-rose-500/40 shadow-md shadow-rose-700/10"
-                          : "bg-zinc-850 hover:bg-zinc-800 text-rose-400/80 border-zinc-800"
-                      }`}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${activeBrush === "couple"
+                        ? "bg-rose-700/20 text-rose-400 border-rose-500/40 shadow-md shadow-rose-700/10"
+                        : "bg-zinc-850 hover:bg-zinc-800 text-rose-400/80 border-zinc-800"
+                        }`}
                     >
                       <span className="w-4 h-4 rounded bg-rose-700 inline-block border border-rose-500" />
                       Ghế Đôi (Sweetbox)
@@ -2840,7 +2826,7 @@ export default function AdminPortalPage({
           <div className="w-full max-w-sm my-8 flex flex-col items-center">
             {/* Thermal ticket container */}
             <div id="thermal-ticket-print" className="w-full bg-white text-zinc-950 p-6 rounded shadow-2xl font-mono text-xs border border-zinc-300 relative select-none">
-              
+
               {/* Jagged borders for thermal receipt look */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-[radial-gradient(circle_at_bottom,_transparent_3px,_white_3px)] bg-[length:8px_8px] bg-repeat-x -translate-y-1" />
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-[radial-gradient(circle_at_top,_transparent_3px,_white_3px)] bg-[length:8px_8px] bg-repeat-x translate-y-1" />
@@ -2863,7 +2849,7 @@ export default function AdminPortalPage({
                   <span className="text-[10px] text-zinc-500 uppercase block font-sans">Phim / Movie:</span>
                   <span className="text-sm font-extrabold text-zinc-900 font-sans block leading-tight">{printedTicket.movieTitle}</span>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-2 text-zinc-900 pt-1">
                   <div>
                     <span className="text-[9px] text-zinc-500 uppercase block font-sans">Ngày / Date:</span>
