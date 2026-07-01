@@ -1,11 +1,13 @@
 # Hướng dẫn Demo chi tiết các Tình huống Tương tranh (Mô phỏng Thao tác Thủ công)
 
-Tài liệu này hướng dẫn chi tiết cách tự thao tác trực tiếp trên giao diện (giữa 2 trình duyệt song song đóng vai trò 2 khách hàng thực tế) để **tự gây ra lỗi tương tranh** và **kiểm chứng sửa lỗi** bằng SQL Server. 
+Tài liệu này hướng dẫn chi tiết cách tự thao tác trực tiếp trên giao diện (giữa 2 trình duyệt song song đóng vai trò 2 khách hàng thực tế) để **tự gây ra lỗi tương tranh** và **kiểm chứng sửa lỗi** bằng SQL Server.
 
 > [!IMPORTANT]
 > **Quy tắc Demo**:
-> * **Để tạo ra lỗi**: Trong mục cài đặt tương tranh (Dev Panel), luôn giữ mục **"Tình huống tương tranh"** ở trạng thái **"Không giả lập (Mặc định)"** (Scenario: `none`). 
-> * **Vai trò của Dev Panel**: Chỉ dùng để cấu hình các thông số kỹ thuật (độ trễ `Latency`, mức cô lập `Isolation Level`, nút bật/tắt `Sửa lỗi/Lock Fix`) để hỗ trợ kiểm chứng hành vi CSDL.
+> * **Để tạo ra lỗi**: Không cần thiết lập tình huống trong Dev Panel (luôn giữ **"Tình huống tương tranh"** ở trạng thái **"Không giả lập (Mặc định)"** / Scenario: `none`). 
+> * **Thao tác thủ công**: Chia đôi màn hình thành 2 cửa sổ để mô phỏng 2 người thật đặt vé cùng lúc, click chuột lần lượt trên cả 2 màn hình để tạo tương tranh vật lý dưới SQL Server.
+> * **Vai trò của Dev Panel**: Chỉ mở lên khi cần **tiến hành sửa lỗi** (bằng cách chọn Isolation Level cao hơn hoặc bật nút **"Sửa lỗi" / Lock Fix**) hoặc để xem **Nhật ký SQL**.
+> * **Cơ chế độ trễ**: Hệ thống đã được cấu hình mặc định độ trễ giao dịch là **5.0 giây** khi chưa được sửa lỗi, cho phép bạn thoải mái chuyển đổi giữa 2 màn hình để click thao tác tạo tương tranh.
 
 ---
 
@@ -15,214 +17,173 @@ Tài liệu này hướng dẫn chi tiết cách tự thao tác trực tiếp tr
    * Nhấp đúp chuột vào file [run.bat](file:///d:/He%20Quan%20Tri%20CSDL/RDBMS/run.bat) ở thư mục gốc của dự án.
    * Đảm bảo cả máy chủ Backend (port 5000) và Frontend (port 5173/5174) đều hoạt động.
 
-2. **Mở song song 2 trình duyệt để thao tác**:
+2. **Mở song song 2 trình duyệt**:
    * **Màn hình A (Trái)**: Mở trình duyệt bình thường (đại diện Khách A).
-   * **Màn hình B (Phải)**: Mở một tab **Ẩn danh (Incognito)** (đại diện Khách B).
+   * **Màn hình B (Phải)**: Mở một tab **Ẩn danh (Incognito)** hoặc trình duyệt khác (đại diện Khách B).
    * Cả hai bên cùng truy cập vào địa chỉ website: `http://localhost:5173`.
 
-3. **Bật Developer Panel (Góc dưới cùng bên phải)**:
+3. **Mở Developer Panel (Góc dưới cùng bên phải)**:
    * Click vào biểu tượng **CPU** màu đỏ ở cả hai màn hình.
    * Chuyển sang Tab **"Nhật ký SQL"** ở cả hai bên để quan sát các câu lệnh chạy thực tế dưới database dưới dạng console log thời gian thực.
+   * Trong suốt quá trình gây lỗi, giữ mục **"Tình huống tương tranh"** là **"Không giả lập (Mặc định)"**.
 
 ---
 
 ## 1. Mất cập nhật (Lost Update)
 
 ### 📌 Nguyên lý tương tranh
-Khách A và Khách B cùng đọc sơ đồ ghế và thấy ghế `A5` đang trống. Giao dịch A thực hiện đặt trước, nhưng do không khóa giữ dòng, Giao dịch B tiếp tục ghi đè lệnh đặt ghế `A5` lên trên. Dẫn đến giao dịch đặt vé của Khách A bị biến mất trên CSDL.
+Khách A và Khách B cùng mở sơ đồ ghế và chọn cùng ghế `A5`. Khi cả hai cùng nhấn thanh toán, do không sử dụng khóa độc quyền để giữ hàng, cả hai luồng đều đọc thấy ghế trống và thực hiện chèn vé đè lên nhau.
 
 ---
 
 ### 🖥️ Các bước thực hiện Demo
 
-#### Bước 1: Thiết lập tham số (Dev Panel)
-* Trên **cả hai màn hình A & B**:
-  * Bật **"Kích hoạt chế độ giả lập tương tranh"** (Dev Mode: ON).
-  * **Tình huống tương tranh**: Chọn **"Không giả lập (Mặc định)"** (Scenario: `none`).
-  * **Độ trễ lock/query**: Kéo lên **5.0s** (độ trễ này giúp ta có thời gian click tương tranh).
-  * **Tắt (OFF)** nút: *Sử dụng sửa lỗi (Lock Fix: OFF)*.
-  * **Isolation Level**: **READ COMMITTED** (mức mặc định của SQL Server).
-
-#### Bước 2: Thao tác gây lỗi trực tiếp trên UI
+#### Bước 1: Gây lỗi trực tiếp trên giao diện đặt vé
 1. Trên cả hai màn hình, cùng chọn phim **Dune: Part Two** -> chọn suất chiếu **09:30 (Hall 1)** ngày hôm nay.
 2. Cả hai cùng click chọn ghế **A5** (ghế chuyển sang màu cam).
-3. Nhấp nút **"Tiếp theo"** ở cả hai màn hình. Vì ở chế độ Không giả lập, nút này sẽ kích hoạt giao dịch đặt vé thực tế và giữ kết nối mở trong vòng 5 giây trước khi Commit.
-4. **Hành động click trùng nhau**:
-   * Click **"Xác nhận đặt vé"** ở **Màn hình A (Trái)** trước.
-   * *Ngay lập tức* (trong vòng 5 giây đó), click **"Xác nhận đặt vé"** ở **Màn hình B (Phải)**.
-
-#### Bước 3: Hiện tượng xảy ra
-* Cả hai màn hình đều chạy hết vòng quay tải và báo **Thành công**!
-* Nhìn vào **Nhật ký SQL**: Cả hai luồng A và B đều ghi nhận INSERT hóa đơn vé thành công cho ghế `A5`.
-* Tuy nhiên, nếu bạn tải lại sơ đồ ghế hoặc kiểm tra database, ghế `A5` đã bị chiếm hữu hoàn toàn bởi Khách B (vé của A bị ghi đè/mất dấu cập nhật).
+3. Nhấn **"Tiếp theo"** ở cả 2 bên để cùng tiến tới trang **Xác nhận đặt vé (Trang QR Thanh toán)**.
+4. **Hành động click tương tranh**:
+   * Click nút **"Xác nhận đặt vé"** ở **Màn hình A (Trái)**.
+   * *Ngay lập tức* (trong vòng 5 giây khi giao dịch A đang xử lý), di chuột sang click nút **"Xác nhận đặt vé"** ở **Màn hình B (Phải)**.
+5. **Hiện tượng**: Cả hai màn hình đều báo đặt vé **Thành công**! Tuy nhiên, khi kiểm tra CSDL, vé của B đã ghi đè và xóa mất cập nhật của A.
 
 ---
 
-### 🛡️ Cách kiểm chứng Sửa lỗi
-1. Mở **Dev Panel** trên cả hai màn hình -> Bật **"Đã áp dụng cách khắc phục"** (Sử dụng SP mới có cơ chế `UPDLOCK, HOLDLOCK`).
-2. Tiến hành đặt trùng ghế **A6** trên cả hai màn hình:
-   * Nhấp **"Xác nhận đặt vé"** bên màn hình A.
-   * Ngay sau đó, nhấp **"Xác nhận đặt vé"** bên màn hình B.
-3. **Hiện tượng xảy ra**:
-   * Màn hình B sẽ bị **Block (xoay vòng chờ)** chứ không thành công ngay.
-   * Trên Tab **Nhật ký SQL** của màn hình B, bạn sẽ thấy câu lệnh SQL bị treo để đợi Khách A kết thúc giao dịch.
-   * Sau khi màn hình A hết 5 giây và báo thành công (Commit), màn hình B mới được tiếp tục xử lý.
-   * Do A đã đặt ghế, CSDL kiểm tra và từ chối giao dịch B -> màn hình B lập tức hiển thị thông báo: `"Ghế A6 đã bị bán trước đó. Giao dịch thất bại!"` và rollback an toàn!
+### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
+1. Trên **cả hai màn hình A & B**:
+   * Mở **Dev Panel** -> Bật nút: **"Đã áp dụng cách khắc phục"** (UPDLOCK, HOLDLOCK).
+2. Lặp lại các thao tác đặt trùng ghế khác (ví dụ: ghế **A6**):
+   * Cả hai chọn ghế **A6** -> vào trang xác nhận QR.
+   * Click **"Xác nhận đặt vé"** bên màn hình A trước.
+   * Ngay sau đó, click **"Xác nhận đặt vé"** bên màn hình B.
+3. **Hiện tượng sau khi sửa**:
+   * Màn hình B bị xoay vòng chờ (Block) vì giao dịch của A đang giữ khóa UPDLOCK trên ghế.
+   * Sau khi A hoàn tất thành công (hết 5 giây), B được tiếp tục chạy nhưng CSDL báo ghế đã bán -> Giao dịch B hiển thị lỗi: `"Ghế A6 đã bị bán trước đó. Giao dịch thất bại!"` và rollback an toàn.
 
 ---
 
 ## 2. Đọc dữ liệu rác (Dirty Read)
 
 ### 📌 Nguyên lý tương tranh
-Giao dịch A đang thực hiện đặt ghế thanh toán (chưa Commit). Ghế tạm thời được lưu trong CSDL. Giao dịch B vào đọc sơ đồ ghế và thấy ghế đã bị khóa (Đọc dữ liệu chưa commit). Sau đó Giao dịch A gặp lỗi thanh toán hoặc hủy vé (Rollback). Ghế trở lại trạng thái trống. Giao dịch B đã đọc phải thông tin rác.
+Giao dịch A đang thực hiện thanh toán mua ghế `A2` (chưa commit). Giao dịch B thực hiện đọc trạng thái sơ đồ ghế. Do B chạy dưới mức cô lập cho phép đọc dữ liệu chưa commit, B thấy ghế đã bán. Sau đó giao dịch của A bị hủy hoặc rollback, nhưng B đã đọc phải thông tin rác.
 
 ---
 
 ### 🖥️ Các bước thực hiện Demo
 
-#### Bước 1: Thiết lập tham số (Dev Panel)
-* **Màn hình A (Trái - Khách đặt vé)**:
-  * Tình huống: **"Không giả lập (Mặc định)"**.
-  * Độ trễ lock/query: Kéo lên **5.0s**.
-  * Isolation Level: **READ COMMITTED**.
-* **Màn hình B (Phải - Khách xem sơ đồ)**:
-  * Tình huống: **"Không giả lập (Mặc định)"**.
-  * Isolation Level: Đổi thủ công sang **READ UNCOMMITTED** (mức cô lập cho phép đọc dữ liệu chưa commit).
-
-#### Bước 2: Thao tác gây lỗi trực tiếp trên UI
-1. Trên cả hai màn hình, cùng vào sơ đồ ghế phim **Dune**, suất chiếu **09:30**.
-2. **Màn hình A**: Chọn ghế **A2** -> bấm **"Tiếp theo"** để chạy giao dịch giữ ghế trong 5 giây (chưa Commit).
-3. **Màn hình B**: *Ngay lập tức* (trong vòng 5 giây đó), nhấn **F5** để tải lại sơ đồ ghế.
-4. **Hiện tượng xảy ra**:
-   * Màn hình B sẽ thấy ghế **A2** hiển thị màu đỏ (Đã bán) dù giao dịch A chưa kết thúc.
-   * Sau 5 giây, giao dịch A gặp lỗi hoặc người dùng click tắt/hủy -> CSDL thực hiện **Rollback**. Ghế `A2` thực chất vẫn trống, nhưng Khách B đã đọc sai thông tin.
+#### Bước 1: Gây lỗi trực tiếp trên giao diện
+1. Thiết lập mức cô lập đọc rác cho Khách B: Trên **Màn hình B (Phải)**, mở **Dev Panel** -> chọn Isolation Level là **READ UNCOMMITTED**.
+2. Trên cả hai màn hình, cùng chọn phim **Dune: Part Two**, suất chiếu **09:30**.
+3. **Màn hình A (Trái)**: Chọn ghế **A2** -> nhấn **"Tiếp theo"** -> nhấn **"Xác nhận đặt vé"**. Giao dịch A đang thực hiện giữ ghế trong vòng 5 giây (chưa commit).
+4. **Màn hình B (Phải)**: *Ngay lập tức* (trong 5 giây đó), nhấn **F5** để tải lại sơ đồ ghế.
+5. **Hiện tượng**:
+   * Màn hình B hiển thị ghế **A2** màu đỏ (Đã bán) vì đã đọc được dữ liệu chưa commit của A.
+   * Hết 5 giây, giao dịch A gặp lỗi thanh toán hoặc bạn đóng tab (giả lập lỗi) -> Giao dịch A bị **Rollback**. Ghế `A2` thực chất vẫn trống, nhưng B đã đọc sai thông tin.
 
 ---
 
-### 🛡️ Cách kiểm chứng Sửa lỗi
-1. Trên **Dev Panel của màn hình B**, đổi mức cô lập về **READ COMMITTED** (chỉ đọc dữ liệu đã commit).
-2. Thực hiện lại quy trình đặt ghế `A2` bên màn hình A.
-3. Khi màn hình A đang trong 5 giây chờ, màn hình B nhấn F5 tải lại trang.
-4. **Hiện tượng xảy ra**:
-   * Màn hình B sẽ bị treo tải sơ đồ ghế (do bị Block bởi khóa độc quyền của A đang giữ trên dữ liệu A2) hoặc sơ đồ ghế sẽ chỉ hiển thị `A2` ở trạng thái **Trống** cho đến khi giao dịch của A kết thúc (Commit hoặc Rollback hoàn toàn).
+### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
+1. Trên **Dev Panel của màn hình B**, chuyển đổi Isolation Level về **READ COMMITTED** (mức mặc định ngăn chặn đọc rác).
+2. Lặp lại thao tác đặt ghế A2 ở màn hình A.
+3. Trong lúc A đang xoay vòng chờ thanh toán, màn hình B bấm F5 tải lại sơ đồ ghế.
+4. **Hiện tượng sau khi sửa**:
+   * Màn hình B sẽ bị treo xoay vòng chờ tải trang (Block) hoặc sơ đồ ghế chỉ hiện thị `A2` ở trạng thái **Trống** cho đến khi giao dịch của A thực sự Commit hoặc Rollback xong, ngăn ngừa hoàn toàn Dirty Read.
 
 ---
 
 ## 3. Đọc không lặp lại (Non-repeatable Read)
 
 ### 📌 Nguyên lý tương tranh
-Thủ quỹ A thực hiện truy vấn tổng doanh thu lần 1 (Transaction A đang mở). Trong lúc đó, một khách hàng B thực hiện hủy vé thành công (Commit). Thủ quỹ A đọc lại doanh thu lần 2 trong cùng giao dịch và thu được con số khác so với lần 1.
+Thủ quỹ A truy vấn tổng doanh thu lần 1. Trong lúc giao dịch A chưa kết thúc, Khách B thực hiện hủy/hoàn vé thành công. Thủ quỹ A truy vấn lại lần 2 trong cùng giao dịch và thấy tổng doanh thu bị thay đổi (giảm đi).
 
 ---
 
 ### 🖥️ Các bước thực hiện Demo
 
-#### Bước 1: Thiết lập tham số (Dev Panel)
-* Trên **Dev Panel**:
-  * Tình huống: **"Không giả lập (Mặc định)"** (Scenario: `none`).
-  * Isolation Level: **READ COMMITTED**.
-  * Độ trễ lock/query: Kéo lên **5.0s**.
-
-#### Bước 2: Thao tác gây lỗi trực tiếp trên UI
-1. Vào **Admin Portal** -> Chọn mục **Báo cáo Doanh thu**.
-2. Chọn ngày hôm nay và click vào nút **"Xem báo cáo (Tương tranh)"**.
+#### Bước 1: Gây lỗi trực tiếp trên giao diện
+1. Trên **Màn hình A (Trái)**, vào **Admin Portal** -> **Báo cáo Doanh thu**.
+2. Nhấn nút **"Xem báo cáo (Tương tranh)"** (Giao dịch sử dụng mặc định READ COMMITTED).
 3. **Hành động tương tranh**:
-   * Giao dịch A sẽ bắt đầu, đọc doanh thu lần 1 (Ví dụ hiển thị: 10,000,000đ) và treo chờ 5 giây.
-   * Hệ thống tự động kích hoạt một tiến trình hủy vé mẫu `CNS_REVENUE_DEL` trị giá `1,200,000đ` chạy ngầm song song (đóng vai trò Khách B hủy vé thành công).
-   * Hết 5 giây, Giao dịch A đọc lại lần 2.
-4. **Hiện tượng xảy ra**:
-   * Số tiền doanh thu lần 2 hiển thị trên console log bị **giảm đi 1,200,000đ** so với lần 1 (Chỉ còn 8,800,000đ). Hệ thống báo lỗi tương tranh dữ liệu không nhất quán.
+   * Giao dịch A đọc doanh thu lần 1 (ví dụ: hiển thị 10,000,000đ) và treo chờ 5 giây.
+   * CSDL tự động kích hoạt một tiến trình nền thực hiện xóa vé mẫu `CNS_REVENUE_DEL` trị giá `1,200,000đ` (đại diện Khách B hủy vé thành công).
+   * Giao dịch A thực hiện truy vấn lần 2.
+4. **Hiện tượng**: Tổng doanh thu lần 2 bị **giảm đi 1,200,000đ** so với lần 1. Hệ thống hiển thị cảnh báo lỗi tương tranh không nhất quán trên Console log của trang Admin.
 
 ---
 
-### 🛡️ Cách kiểm chứng Sửa lỗi
-1. Mở **Dev Panel** -> Chuyển Isolation Level sang **REPEATABLE READ**.
-2. Bấm lại nút **"Xem báo cáo (Tương tranh)"**.
-3. **Hiện tượng xảy ra**:
-   * Lần đọc 1 hiển thị tổng tiền doanh thu.
-   * Khóa đọc Shared Lock (S) giữ chặt dòng dữ liệu vé mẫu. Tiến trình hủy vé ngầm của B cố gắng chạy nhưng bị **Block hoàn toàn** (SQL Server treo hàng chờ).
-   * Lần đọc 2 đếm lại -> kết quả **trùng khớp hoàn toàn** với lần 1.
-   * Giao dịch A kết thúc và Commit -> Tiến trình hủy vé B mới được phép hoàn tất.
+### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
+1. Trên **Dev Panel của màn hình Admin**, chuyển Isolation Level sang **REPEATABLE READ**.
+2. Bấm nút **"Xem báo cáo (Tương tranh)"** lần nữa.
+3. **Hiện tượng sau khi sửa**:
+   * Lần đọc 1 hiển thị số tiền.
+   * Tiến trình hủy vé mẫu của B cố gắng chạy nhưng bị CSDL **Block** do khóa đọc (Shared Lock) của REPEATABLE READ đang giữ chặt dòng doanh thu.
+   * Lần đọc 2 cho ra kết quả **trùng khớp hoàn toàn** với lần 1.
+   * Sau khi giao dịch A kết thúc, tiến trình B mới được phép hoàn tất.
 
 ---
 
 ## 4. Lỗi bóng ma (Phantom Read)
 
 ### 📌 Nguyên lý tương tranh
-Giao dịch A đang thực hiện tra cứu số lượng suất chiếu (Transaction A đang mở). Trong lúc đó, Admin B chèn thêm một suất chiếu mới (Commit). Giao dịch A đọc lại lần 2 và phát hiện số lượng suất chiếu bị tăng lên (dòng dữ liệu bóng ma xuất hiện).
+Khách A truy vấn danh sách suất chiếu của phim lần 1. Trong lúc đó, Admin B chèn thêm một suất chiếu mới. Khách A truy vấn lại lần 2 trong cùng giao dịch và thấy xuất hiện thêm suất chiếu mới (bóng ma).
 
 ---
 
 ### 🖥️ Các bước thực hiện Demo
 
-#### Bước 1: Thiết lập tham số (Dev Panel)
-* Trên **Dev Panel**:
-  * Tình huống: **"Không giả lập (Mặc định)"** (Scenario: `none`).
-  * Isolation Level: **REPEATABLE READ** (Lưu ý: REPEATABLE READ chỉ khóa các dòng hiện có, không ngăn được chèn dòng mới).
-  * Độ trễ lock/query: Kéo lên **5.0s**.
-
-#### Bước 2: Thao tác gây lỗi trực tiếp trên UI
-1. Vào **Admin Portal** -> Chọn tab **Quầy bán vé (Sales)**.
-2. Chọn một Phim, Rạp và Ngày chiếu.
-3. Click vào nút **"Tra cứu suất chiếu (Tương tranh Phantom)"** (nút màu đỏ đặc biệt kế bên tiêu đề Suất chiếu).
+#### Bước 1: Gây lỗi trực tiếp trên giao diện
+1. Trên **Màn hình A (Trái)**, vào **Admin Portal** -> tab **Quầy bán vé (Sales)**.
+2. Chọn Phim, Rạp và Ngày chiếu.
+3. Click vào nút **"Tra cứu suất chiếu (Tương tranh Phantom)"** (mức cô lập mặc định REPEATABLE READ).
 4. **Hành động tương tranh**:
-   * Giao dịch A bắt đầu quét số suất chiếu lần 1 và treo chờ 5 giây.
-   * Trong 5 giây đó, hệ thống chạy ngầm chèn thêm 1 suất chiếu "Bóng ma" lúc 20:30 (đại diện Admin B chèn thành công).
+   * Giao dịch A quét đếm suất chiếu lần 1 và treo chờ 5 giây.
+   * Trong 5 giây đó, hệ thống chạy ngầm lệnh `INSERT` thêm một suất chiếu bóng ma mới vào bảng `Showtime` (đại diện Admin B chèn thành công).
    * Hết 5 giây, giao dịch A quét lại lần 2.
-5. **Hiện tượng xảy ra**:
-   * Suất chiếu mới ID 999 (phòng PHANTOM) xuất hiện trên sơ đồ của A.
-   * Nhật ký SQL báo lỗi Phantom Read xảy ra do số lượng bản ghi thay đổi giữa 2 lần đọc trong cùng một giao dịch.
+5. **Hiện tượng**: Suất chiếu mới ID 999 (phòng PHANTOM) xuất hiện trên màn hình hiển thị của A. Nhật ký SQL báo lỗi Phantom Read.
 
 ---
 
-### 🛡️ Cách kiểm chứng Sửa lỗi
-1. Mở **Dev Panel** -> Chuyển Isolation Level sang **SERIALIZABLE**.
+### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
+1. Trên **Dev Panel**, chuyển đổi Isolation Level sang **SERIALIZABLE** (mức cô lập cao nhất).
 2. Click lại nút **"Tra cứu suất chiếu (Tương tranh Phantom)"**.
-3. **Hiện tượng xảy ra**:
-   * Giao dịch A quét lần 1 và áp đặt khóa phạm vi (Range Lock).
-   * Tiến trình chèn suất chiếu ngầm bị **Block hoàn toàn** (không thể ghi dữ liệu).
-   * Lần đọc 2 cho kết quả suất chiếu hoàn toàn nhất quán với lần 1. 
+3. **Hiện tượng sau khi sửa**:
+   * Giao dịch A thực hiện áp đặt khóa phạm vi (Range Lock).
+   * Tiến trình chèn suất chiếu ngầm bị CSDL **Block hoàn toàn** (treo chờ).
+   * Lần đọc 2 đếm lại cho ra kết quả suất chiếu **nhất quán hoàn toàn** với lần 1. Sau khi A commit, suất chiếu mới mới được chèn vào.
 
 ---
 
 ## 5. Khóa chết (Deadlock)
 
 ### 📌 Nguyên lý tương tranh
-Khách A đặt combo 2 ghế `A1` và `A2` (khóa `A1` thành công, chờ khóa `A2`). Khách B đặt combo 2 ghế ngược lại `A2` và `A1` (khóa `A2` thành công, chờ khóa `A1`). Cả hai giữ khóa của nhau và chờ nhau vô hạn. SQL Server sẽ tự động phát hiện khóa chéo này sau 1-2 giây và chủ động hủy (Kill) một giao dịch làm nạn nhân (Deadlock Victim - Mã lỗi 1205).
+Khách A mua ghế `A1` và `A2` (khóa `A1` trước, chờ khóa `A2`). Khách B mua cùng ghế nhưng theo thứ tự ngược lại `A2` và `A1` (khóa `A2` trước, chờ khóa `A1`). Cả hai khóa chéo nhau tạo thành vòng lặp vô hạn. SQL Server sẽ tự phát hiện và hủy (Kill) một giao dịch để giải phóng tài nguyên.
 
 ---
 
 ### 🖥️ Các bước thực hiện Demo
 
-#### Bước 1: Thiết lập tham số (Dev Panel)
-* Trên **cả hai màn hình A & B**:
-  * Tình huống: **"Không giả lập (Mặc định)"** (Scenario: `none`).
-  * Isolation Level: **READ COMMITTED**.
-  * Độ trễ lock/query: Kéo lên **5.0s**.
-  * **Tắt (OFF)** nút: *Sử dụng sửa lỗi (Lock Fix: OFF)*.
-
-#### Bước 2: Thao tác gây lỗi trực tiếp trên UI
-1. Trên cả 2 màn hình, cùng chọn suất chiếu **09:30 (Hall 1)** phim **Dune**.
-2. **Màn hình A (Trái)**: Lần lượt click chọn ghế **A1** trước, sau đó click chọn ghế **A2** (thứ tự chọn: A1 -> A2).
-3. **Màn hình B (Phải)**: Lần lượt click chọn ghế **A2** trước, sau đó click chọn ghế **A1** (thứ tự chọn: A2 -> A1).
-4. Nhấn nút **"Tiếp theo"** ở cả hai màn hình. Lúc này luồng A chuẩn bị khóa A1 rồi tới A2; luồng B chuẩn bị khóa A2 rồi tới A1.
-5. **Hành động tương tranh**:
+#### Bước 1: Gây lỗi trực tiếp trên giao diện đặt vé
+1. Trên cả hai màn hình, cùng chọn suất chiếu **09:30 (Hall 1)** phim **Dune: Part Two**.
+2. **Màn hình A (Trái)**: Lần lượt click chọn ghế **A1** trước, sau đó click chọn ghế **A2** (thứ tự click: A1 -> A2).
+3. **Màn hình B (Phải)**: Lần lượt click chọn ghế **A2** trước, sau đó click chọn ghế **A1** (thứ tự click: A2 -> A1).
+4. Cả hai cùng nhấn nút **"Tiếp theo"** để vào trang **Xác nhận đặt vé (Trang QR)**.
+5. **Hành động click tương tranh**:
    * Nhấp nút **"Xác nhận đặt vé"** ở **Màn hình A (Trái)**.
    * *Ngay lập tức* (trong vòng 1 giây), nhấp nút **"Xác nhận đặt vé"** ở **Màn hình B (Phải)**.
 
-#### Bước 3: Hiện tượng xảy ra
-* Sau khoảng 3-5 giây chờ đợi:
-  * Một bên (ví dụ màn hình B) sẽ đặt vé thành công.
-  * Màn hình còn lại (màn hình A) sẽ bị crash và hiển thị thông báo lỗi nổi bật màu đỏ:
-    > ❌ **LỖI KHÓA CHẾT (Deadlock 1205)**: *"Giao dịch của bạn đã bị SQL Server chọn làm nạn nhân (Deadlock Victim) để giải phóng tài nguyên hệ thống do bị khóa chéo."*
-  * Kiểm tra Tab **Nhật ký SQL** để thấy lỗi 1205 trực tiếp từ CSDL.
+#### Bước 2: Hiện tượng xảy ra
+* Sau khoảng 3 giây chờ xử lý:
+  * Một màn hình đặt vé thành công.
+  * Màn hình còn lại sẽ lập tức hiển thị thông báo lỗi màu đỏ nổi bật:
+    > ❌ **LỖI KHÓA CHẾT (Deadlock 1205)**: *"Giao dịch của bạn đã bị SQL Server chọn làm nạn nhân của Deadlock (Error 1205) để tránh tắc nghẽn hệ thống. Giao dịch đã được rollback an toàn!"*
+  * Bạn có thể mở Tab **"Nhật ký SQL"** để thấy mã lỗi 1205 được in ra.
 
 ---
 
-### 🛡️ Cách kiểm chứng Sửa lỗi
-1. Mở **Dev Panel** ở cả hai bên -> Bật **"Đã áp dụng cách khắc phục"** (Hệ thống kích hoạt thuật toán sắp xếp lại danh sách ghế tăng dần theo bảng chữ cái trước khi thực hiện câu lệnh SELECT khóa).
-2. Lặp lại thao tác chọn ghế: màn A chọn A1 -> A2, màn B chọn A2 -> A1. Click Xác nhận cùng lúc.
-3. **Hiện tượng xảy ra**:
-   * Nhờ thuật toán sắp xếp tự động, cả hai luồng A và B dưới CSDL đều thống nhất khóa `A1` trước rồi mới khóa `A2`.
-   * Luồng của B sẽ bị block chờ một cách có trật tự ở bước khóa ghế `A1` thay vì khóa chéo.
-   * Giao dịch A hoàn tất thành công -> Giao dịch B tiếp tục chạy và báo lỗi ghế đã bán (thay vì bị crash do khóa chết Deadlock). Hệ thống hoàn toàn an toàn và nhất quán!
+### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
+1. Trên **cả hai màn hình A & B**:
+   * Mở **Dev Panel** -> Bật nút: **"Đã áp dụng cách khắc phục"** (Hệ thống kích hoạt thuật toán tự động sắp xếp lại danh sách ghế chọn theo bảng chữ cái trước khi gửi câu lệnh khóa).
+2. Lặp lại quy trình thao tác chọn ghế: màn A chọn A1 -> A2, màn B chọn A2 -> A1. Click Xác nhận cùng lúc ở trang QR.
+3. **Hiện tượng sau khi sửa**:
+   * Nhờ thuật toán sắp xếp tự động, cả hai luồng A và B dưới CSDL đều thống nhất khóa `A1` trước rồi mới khóa `A2`, loại bỏ hoàn toàn khả năng khóa chéo.
+   * Giao dịch A thực hiện khóa thành công, Giao dịch B xếp hàng chờ một cách có trật tự ở ghế `A1` cho đến khi A commit xong. Không còn lỗi Deadlock xảy ra!

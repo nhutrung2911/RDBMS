@@ -38,7 +38,7 @@ export default function App() {
     scenario: "none",
     isolationLevel: "READ_COMMITTED",
     useLockFix: false,
-    latencyMs: 1500
+    latencyMs: 5000
   });
   const [sqlLogs, setSqlLogs] = useState<SqlLog[]>([]);
 

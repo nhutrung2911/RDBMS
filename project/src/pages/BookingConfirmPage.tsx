@@ -450,7 +450,7 @@ export default function BookingConfirmPage({
           userEmail: userEmail || "khach@gmail.com",
           isolationLevel: concurrencyConfig?.isolationLevel || "READ COMMITTED",
           useLockFix: concurrencyConfig?.useLockFix || false,
-          latencyMs: 0
+          latencyMs: concurrencyConfig?.latencyMs ?? 5000
         });
         await syncWithBackend();
       } else {
