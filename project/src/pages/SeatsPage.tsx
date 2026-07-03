@@ -82,47 +82,84 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
 
   // Merge locks from DB
   useEffect(() => {
-    const locks = loadSeatLocks().filter(l => l.showtimeId === showtime.id);
-    const tickets = loadTickets().filter(t => t.movieId === movie.id && t.showtimeTime === showtime.time && t.showtimeDate === showtime.date && t.hall === showtime.hall);
-    
-    // Get all sold seats from tickets
-    const soldFromTickets = new Set<string>();
-    tickets.forEach(t => t.seats.forEach(s => soldFromTickets.add(s)));
-    
-    // Re-initialize seats map from current matching room configuration
-    const freshMap = generateSeats(matchingRoom);
-    
-    // Merge database changes into the fresh seat map
-    const next = { ...freshMap };
-    // 1. Mark sold from tickets
-    soldFromTickets.forEach(s => {
-      next[s] = "sold";
-    });
-    
-    // 2. Handle pending locks based on Dirty Read config
-    locks.forEach(l => {
-      if (l.status === 'sold') {
-        next[l.seatId] = "sold";
-      } else if (l.status === 'pending') {
-        if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === 'dirty_read') {
-          if (concurrencyConfig.isolationLevel === 'READ_UNCOMMITTED') {
-            next[l.seatId] = "sold"; 
-          } else {
-            let defaultType: SeatStatus = "available";
-            if (matchingRoom) {
-              const type = matchingRoom.seats?.[l.seatId] || "standard";
-              defaultType = type === "standard" ? "available" : (type as SeatStatus);
+    const fetchAndMerge = async () => {
+      // 1. Show current local cached tickets immediately to prevent UI lag
+      const initialLocks = loadSeatLocks().filter(l => l.showtimeId === showtime.id);
+      const initialTickets = loadTickets().filter(t => t.showtimeId === showtime.id && t.status !== 'canceled');
+      const initialSold = new Set<string>();
+      initialTickets.forEach(t => t.seats.forEach(s => initialSold.add(s)));
+      
+      const map1 = generateSeats(matchingRoom);
+      initialSold.forEach(s => {
+        map1[s] = "sold";
+      });
+      
+      initialLocks.forEach(l => {
+        if (l.status === 'sold') {
+          map1[l.seatId] = "sold";
+        } else if (l.status === 'pending') {
+          if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === 'dirty_read') {
+            if (concurrencyConfig.isolationLevel === 'READ_UNCOMMITTED') {
+              map1[l.seatId] = "sold"; 
             } else {
-              defaultType = l.seatId.startsWith("J") ? "couple" : ["F","G","H"].includes(l.seatId[0]) ? "vip" : "available";
+              let defaultType: SeatStatus = "available";
+              if (matchingRoom) {
+                const type = matchingRoom.seats?.[l.seatId] || "standard";
+                defaultType = type === "standard" ? "available" : (type as SeatStatus);
+              } else {
+                defaultType = l.seatId.startsWith("J") ? "couple" : ["F","G","H"].includes(l.seatId[0]) ? "vip" : "available";
+              }
+              map1[l.seatId] = defaultType;
             }
-            next[l.seatId] = defaultType;
+          } else {
+            map1[l.seatId] = "sold";
           }
-        } else {
-          next[l.seatId] = "sold";
         }
-      }
-    });
-    setSeatMap(next);
+      });
+      setSeatMap(map1);
+
+      // 2. Fetch fresh tickets from backend and update UI
+      await syncWithBackend();
+      
+      const locks = loadSeatLocks().filter(l => l.showtimeId === showtime.id);
+      const tickets = loadTickets().filter(t => t.showtimeId === showtime.id && t.status !== 'canceled');
+      
+      const soldFromTickets = new Set<string>();
+      tickets.forEach(t => t.seats.forEach(s => soldFromTickets.add(s)));
+      
+      const freshMap = generateSeats(matchingRoom);
+      const next = { ...freshMap };
+      
+      soldFromTickets.forEach(s => {
+        next[s] = "sold";
+      });
+      
+      locks.forEach(l => {
+        if (l.status === 'sold') {
+          next[l.seatId] = "sold";
+        } else if (l.status === 'pending') {
+          if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === 'dirty_read') {
+            if (concurrencyConfig.isolationLevel === 'READ_UNCOMMITTED') {
+              next[l.seatId] = "sold"; 
+            } else {
+              let defaultType: SeatStatus = "available";
+              if (matchingRoom) {
+                const type = matchingRoom.seats?.[l.seatId] || "standard";
+                defaultType = type === "standard" ? "available" : (type as SeatStatus);
+              } else {
+                defaultType = l.seatId.startsWith("J") ? "couple" : ["F","G","H"].includes(l.seatId[0]) ? "vip" : "available";
+              }
+              next[l.seatId] = defaultType;
+            }
+          } else {
+            next[l.seatId] = "sold";
+          }
+        }
+      });
+      setSeatMap(next);
+    };
+
+    fetchAndMerge();
   }, [showtime.id, concurrencyConfig, matchingRoom]);
 
   const handleProceedWithSimulation = async () => {
@@ -680,17 +717,6 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
                 handleProceedWithSimulation();
               } else {
                 // Normal flow without dev mode simulation
-                const simulateCollision = Math.random() < 0.15;
-                if (simulateCollision) {
-                  const conflictedSeat = selectedSeats[Math.floor(Math.random() * selectedSeats.length)];
-                  alert(`Rất tiếc, ghế ${conflictedSeat} vừa có người đặt trước đó vài giây. Vui lòng chọn ghế khác!`);
-                  setSeatMap(prev => ({
-                    ...prev,
-                    [conflictedSeat]: "sold"
-                  }));
-                  return;
-                }
-
                 const combosList: { name: string; quantity: number; price: number }[] = [];
                 onConfirm(selectedSeats, totalPrice, combosList);
               }

@@ -1,9 +1,14 @@
 import { movies as staticMovies, showtimes as staticShowtimes } from "../data/movies";
 import type { Movie, Showtime } from "../data/movies";
-import { checkBackendOnline, getShowtimesAPI, getTicketsAPI } from "./api";
+import { 
+  checkBackendOnline, getShowtimesAPI, getTicketsAPI, 
+  getSeatLocksAPI, addSeatLockAPI, removeSeatLockAPI, clearSeatLocksForTransactionAPI,
+  deleteTicketAPI 
+} from "./api";
 
 export interface BookedTicket {
   id: string;
+  showtimeId?: number;
   movieId: number;
   movieTitle: string;
   moviePoster: string;
@@ -15,7 +20,7 @@ export interface BookedTicket {
   totalPrice: number;
   paymentMethod: string;
   bookedAt: string;
-  status: 'valid' | 'used';
+  status: 'valid' | 'used' | 'canceled';
   userEmail: string | null;
   combos?: { name: string; quantity: number; price: number }[];
 }
@@ -161,6 +166,24 @@ export function updateTicketStatus(id: string, status: 'valid' | 'used'): boolea
   return false;
 }
 
+export async function deleteTicket(id: string): Promise<boolean> {
+  const tickets = loadTickets();
+  const filtered = tickets.filter(t => t.id !== id);
+  localStorage.setItem("tickets_db", JSON.stringify(filtered));
+
+  try {
+    const online = await checkBackendOnline();
+    if (online) {
+      await deleteTicketAPI(id);
+      await syncWithBackend();
+    }
+    return true;
+  } catch (err) {
+    console.error("Failed to delete ticket from backend:", err);
+    return false;
+  }
+}
+
 export interface SeatLock {
   id: string;
   showtimeId: number;
@@ -220,6 +243,11 @@ export function addSeatLock(
   
   filtered.push(newLock);
   saveSeatLocks(filtered);
+
+  // Sync to backend asynchronously
+  addSeatLockAPI(showtimeId, seatId, transactionId, status, durationMs)
+    .catch(err => console.error("Failed to sync added lock to backend:", err));
+
   return newLock;
 }
 
@@ -227,12 +255,20 @@ export function removeSeatLock(showtimeId: number, seatId: string) {
   const locks = loadSeatLocks();
   const filtered = locks.filter(l => !(l.showtimeId === showtimeId && l.seatId === seatId));
   saveSeatLocks(filtered);
+
+  // Sync to backend asynchronously
+  removeSeatLockAPI(showtimeId, seatId)
+    .catch(err => console.error("Failed to sync removed lock from backend:", err));
 }
 
 export function clearSeatLocksForTransaction(transactionId: string) {
   const locks = loadSeatLocks();
   const filtered = locks.filter(l => l.transactionId !== transactionId);
   saveSeatLocks(filtered);
+
+  // Sync to backend asynchronously
+  clearSeatLocksForTransactionAPI(transactionId)
+    .catch(err => console.error("Failed to sync cleared transaction locks from backend:", err));
 }
 
 export function isSeatLocked(showtimeId: number, seatId: string, currentTxId?: string): boolean {
@@ -355,6 +391,16 @@ export async function syncWithBackend(): Promise<boolean> {
     const tickets = await getTicketsAPI();
     if (tickets) {
       localStorage.setItem("tickets_db", JSON.stringify(tickets));
+    }
+
+    // 3. Sync active seat locks from SQL Server/Backend memory
+    try {
+      const locks = await getSeatLocksAPI();
+      if (locks) {
+        localStorage.setItem("seat_locks_db", JSON.stringify(locks));
+      }
+    } catch (lockErr) {
+      console.warn("Failed to sync seat locks from backend:", lockErr);
     }
 
     console.log("Synchronized successfully with SQL Server!");

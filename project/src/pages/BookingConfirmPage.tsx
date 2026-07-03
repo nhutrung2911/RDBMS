@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CheckCircle, Download, Home, Ticket, Clock, MapPin, Film, CreditCard, Smartphone, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
 import type { Movie, Showtime } from "../data/movies";
 import { cinemas } from "../data/movies";
@@ -130,14 +130,10 @@ function BookingTicket({ movie, showtime, seats, total, bookingCode, selectedCom
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3">
-        <button className="flex-1 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-700 py-3 rounded-xl font-medium text-sm transition-colors">
-          <Download className="w-4 h-4" />
-          Tải Vé
-        </button>
+      <div className="flex w-full">
         <button
           onClick={onHome}
-          className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl font-medium text-sm transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white py-3.5 rounded-xl font-medium text-sm transition-colors"
         >
           <Home className="w-4 h-4" />
           Về Trang Chủ
@@ -207,14 +203,7 @@ function QRPayment({
   const details = getMethodDetails();
 
   const handleConfirmClick = () => {
-    setChecking(true);
-    setTimeout(() => {
-      setChecking(false);
-      setCheckSuccess(true);
-      setTimeout(() => {
-        onConfirm();
-      }, 1200);
-    }, 2200);
+    onConfirm();
   };
 
   return (
@@ -323,6 +312,24 @@ export default function BookingConfirmPage({
   const [showOrderSummary, setShowOrderSummary] = useState(true);
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
   const [bookingCode] = useState(() => "CNS" + Math.random().toString(36).substring(2, 8).toUpperCase());
+  const isSubmittingRef = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelTransaction = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
+    clearSeatLocksForTransaction(`TX_${bookingCode}`);
+    
+    if (concurrencyConfig?.devModeEnabled && addSqlLog) {
+      addSqlLog(`CLIENT A: Người dùng nhấn nút Hủy giao dịch (Rollback).`, "info");
+      addSqlLog(`CLIENT A: ROLLBACK TRANSACTION (TX_${bookingCode});`, "error");
+      addSqlLog(`--- KẾT THÚC GIẢ LẬP DIRTY READ (ROLLBACK) ---`, "error");
+    }
+  };
 
   const cinema = cinemas.find((c) => c.id === showtime.cinemaId);
 
@@ -399,16 +406,21 @@ export default function BookingConfirmPage({
   };
 
   const handleConfirmPayment = async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     if (concurrencyConfig?.devModeEnabled && addSqlLog) {
-      addSqlLog(`CLIENT A: Người dùng hoàn tất thanh toán.`, "info");
-      addSqlLog(`CLIENT A: UPDATE Seat SET SeatStatus = 'SOLD' WHERE SeatID IN (${selectedSeats.map(s => `'${s}'`).join(', ')});`, "query");
-      addSqlLog(`CLIENT A: COMMIT TRANSACTION (TX_${bookingCode});`, "success");
-      addSqlLog(`CLIENT A: Vé đã được bán thành công. Giải phóng khóa tạm giữ.`, "success");
-      addSqlLog(`--- KẾT THÚC GIẢ LẬP DIRTY READ (COMMIT) ---`, "success");
+      addSqlLog(`CLIENT A: Người dùng hoàn tất thanh toán. Bắt đầu giao dịch.`, "info");
+      addSqlLog(`CLIENT A: BEGIN TRANSACTION (TX_${bookingCode});`, "query");
+      addSqlLog(`CLIENT A: INSERT INTO Ticket ...`, "query");
+      addSqlLog(`CLIENT A: INSERT INTO TicketDetail ... (Ghế ${selectedSeats.join(', ')});`, "query");
+      addSqlLog(`CLIENT A: Đang giữ các khóa và treo chờ (WAITFOR DELAY ${concurrencyConfig?.latencyMs ?? 10000}ms)`, "lock");
     }
     
-    clearSeatLocksForTransaction(`TX_${bookingCode}`);
-
     // Create new ticket to save
     const newTicket = {
       id: bookingCode,
@@ -450,9 +462,18 @@ export default function BookingConfirmPage({
           userEmail: userEmail || "khach@gmail.com",
           isolationLevel: concurrencyConfig?.isolationLevel || "READ COMMITTED",
           useLockFix: concurrencyConfig?.useLockFix || false,
-          latencyMs: concurrencyConfig?.latencyMs ?? 5000
-        });
+          latencyMs: concurrencyConfig?.latencyMs ?? 10000
+        }, controller.signal);
+        
         await syncWithBackend();
+        
+        // Decrement showtime's seats
+        const currentShowtimes = loadShowtimes();
+        const idx = currentShowtimes.findIndex(s => s.id === showtime.id);
+        if (idx !== -1) {
+          currentShowtimes[idx].availableSeats = Math.max(0, currentShowtimes[idx].availableSeats - selectedSeats.length);
+          saveShowtimes(currentShowtimes);
+        }
       } else {
         // Save ticket to local db
         saveTicket(newTicket);
@@ -465,14 +486,52 @@ export default function BookingConfirmPage({
           saveShowtimes(currentShowtimes);
         }
       }
+
+      if (concurrencyConfig?.devModeEnabled && addSqlLog) {
+        addSqlLog(`CLIENT A: COMMIT TRANSACTION (TX_${bookingCode});`, "success");
+        addSqlLog(`CLIENT A: Vé đã được bán thành công. Giải phóng khóa tạm giữ.`, "success");
+        addSqlLog(`--- KẾT THÚC GIẢ LẬP DIRTY READ (COMMIT) ---`, "success");
+      }
+
+      clearSeatLocksForTransaction(`TX_${bookingCode}`);
+      setIsSubmitting(false);
       setStep("success");
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log("Transaction request aborted by user.");
+        return;
+      }
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
       alert(`Lỗi đặt vé trên SQL Server: ${err.message}`);
     }
   };
 
   const combosPrice = selectedCombos.reduce((sum, c) => sum + (c.price * c.quantity), 0);
   const ticketsPrice = total - combosPrice;
+
+  if (isSubmitting) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center shadow-2xl space-y-6">
+          <div className="py-6 flex flex-col items-center justify-center">
+            <div className="w-12 h-12 border-4 border-red-600/30 border-t-red-600 rounded-full animate-spin mb-6" />
+            <h3 className="text-white font-bold text-lg mb-2">Đang đối soát giao dịch...</h3>
+            <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
+              Hệ thống đang kiểm tra thanh toán của bạn dưới SQL Server. Quá trình này có thể mất tối đa 10 giây.
+            </p>
+          </div>
+          
+          <button
+            onClick={handleCancelTransaction}
+            className="w-full bg-zinc-800 hover:bg-zinc-700 text-red-500 font-bold border border-zinc-700/50 py-3.5 rounded-xl transition-all shadow-md text-sm"
+          >
+            Hủy Giao Dịch (Rollback)
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (step === "success") {
     return (

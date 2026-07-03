@@ -2,6 +2,7 @@ import { sql, connectDatabase, getMockMode } from "../config/database";
 
 export interface BookedTicket {
   id: string;
+  showtimeId?: number;
   movieId: number;
   movieTitle: string;
   moviePoster: string;
@@ -13,7 +14,7 @@ export interface BookedTicket {
   totalPrice: number;
   paymentMethod: string;
   bookedAt: string;
-  status: "valid" | "used";
+  status: "valid" | "used" | "canceled";
   userEmail: string | null;
   combos?: { name: string; quantity: number; price: number }[];
 }
@@ -51,6 +52,7 @@ export class TicketService {
     const result = await pool.request().query(`
       SELECT 
           t.TicketId AS TicketID,
+          sh.ShowtimeId AS ShowtimeID,
           sh.MovieId AS MovieID,
           m.Title AS MovieTitle,
           m.Poster AS MoviePoster,
@@ -77,7 +79,7 @@ export class TicketService {
       LEFT JOIN Cinema c ON r.CinemaId = c.CinemaId
       LEFT JOIN Movie m ON sh.MovieId = m.MovieId
       GROUP BY 
-          t.TicketId, sh.MovieId, m.Title, m.Poster, c.CinemaName, 
+          t.TicketId, sh.ShowtimeId, sh.MovieId, m.Title, m.Poster, c.CinemaName, 
           sh.StartTime, r.RoomName, t.TotalPrice, t.PaymentMethod, 
           t.BookingTime, t.Status, t.UserEmail
       ORDER BY t.BookingTime DESC
@@ -85,6 +87,7 @@ export class TicketService {
     
     return result.recordset.map(row => ({
       id: row.TicketID,
+      showtimeId: row.ShowtimeID || undefined,
       movieId: row.MovieID || 1,
       movieTitle: row.MovieTitle || "Unknown Movie",
       moviePoster: row.MoviePoster || "",
@@ -96,7 +99,7 @@ export class TicketService {
       totalPrice: row.TotalPrice,
       paymentMethod: row.PaymentMethod,
       bookedAt: row.BookedAt,
-      status: row.Status === 'valid' ? 'valid' : 'used',
+      status: row.Status as "valid" | "used" | "canceled",
       userEmail: row.UserEmail
     }));
   }
@@ -289,10 +292,12 @@ export class TicketService {
     totalPrice: number;
     paymentMethod: string;
     combos?: any[];
+    clientAborted?: () => boolean;
   }): Promise<BookedTicket> {
     const {
       showtimeId, seats, useLockFix, latencyMs, isolationLevel,
-      userEmail, movieTitle, moviePoster, cinemaName, showtimeDate, showtimeTime, totalPrice, paymentMethod, combos
+      userEmail, movieTitle, moviePoster, cinemaName, showtimeDate, showtimeTime, totalPrice, paymentMethod, combos,
+      clientAborted
     } = params;
 
     const transactionId = "TX_" + Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -358,23 +363,8 @@ export class TicketService {
     await transaction.begin(isolationLevel);
 
     try {
-      // Check for seats locks/availability using query statements with UPDLOCK/HOLDLOCK on physical Seat table
-      const lockHint = useLockFix ? "WITH (UPDLOCK, HOLDLOCK)" : "";
-
-      // DEADLOCK prevention: If fix is enabled, sort the seats list alphabetically
-      const orderedSeats = useLockFix ? [...seats].sort() : seats;
-
-      for (const seat of orderedSeats) {
-        // Step 2.1: Lock the static physical seat row first
-        await transaction.request()
-          .input("showtimeId", sql.Int, showtimeId)
-          .input("seatNumber", sql.VarChar, seat)
-          .query(`
-            SELECT SeatId FROM Seat ${lockHint} 
-            WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId)
-          `);
-
-        // Step 2.2: Query the view to check if it's already sold (No hint on the complex view)
+      // 1. READ PHASE: Check initial seat status (No locking hints held during latency under OCC)
+      for (const seat of seats) {
         const seatCheck = await transaction.request()
           .input("showtimeId", sql.Int, showtimeId)
           .input("seatNumber", sql.VarChar, seat)
@@ -389,12 +379,43 @@ export class TicketService {
         }
       }
 
-      // Simulate Latency (transaction stays open, locks are held)
+      // Simulate Latency (transaction stays open, but locks are NOT held under OCC)
       if (latencyMs > 0) {
-        await new Promise(resolve => setTimeout(resolve, latencyMs));
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            clearInterval(interval);
+            resolve();
+          }, latencyMs);
+
+          const interval = setInterval(() => {
+            if (clientAborted && clientAborted()) {
+              clearTimeout(timer);
+              clearInterval(interval);
+              reject(new Error("Client aborted transaction"));
+            }
+          }, 200);
+        });
       }
 
-      // Insert Ticket invoice into database (using matching physical schema)
+      // 2. VALIDATION PHASE: Validate before writing to CSDL (Only when fix is active)
+      if (useLockFix) {
+        for (const seat of seats) {
+          const validationCheck = await transaction.request()
+            .input("showtimeId", sql.Int, showtimeId)
+            .input("seatNumber", sql.VarChar, seat)
+            .query(`
+              SELECT Status FROM v_ShowtimeSeats 
+              WHERE SeatNumber = @seatNumber AND ShowtimeId = @showtimeId
+            `);
+
+          const currentStatus = validationCheck.recordset[0]?.Status;
+          if (currentStatus === "sold" || currentStatus === "SOLD") {
+            throw new Error(`Xung đột tương tranh (Validation thất bại): Ghế ${seat} đã được đặt bởi khách hàng khác trong thời gian chờ.`);
+          }
+        }
+      }
+
+      // 3. WRITE PHASE: Write ticket records to database
       const ticketId = "CNS" + Math.random().toString(36).substring(2, 7).toUpperCase();
       // Default to customer ID 1 or a lookup
       await transaction.request()
@@ -408,23 +429,46 @@ export class TicketService {
           VALUES (@ticketId, @customerId, GETDATE(), @totalPrice, @paymentMethod, @userEmail, N'valid')
         `);
 
-      // Insert seat tickets into TicketDetail (instead of trying to UPDATE Seat Status)
+      // Insert seat tickets into TicketDetail (with Lost Update overwrite simulation if useLockFix is false)
       const pricePerSeat = totalPrice / seats.length;
       for (const seat of seats) {
-        await transaction.request()
-          .input("ticketId", sql.VarChar, ticketId)
+        const checkConflict = await transaction.request()
           .input("showtimeId", sql.Int, showtimeId)
           .input("seatNumber", sql.VarChar, seat)
-          .input("price", sql.Decimal(18,2), pricePerSeat)
           .query(`
-            INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)
-            VALUES (
-              @ticketId, 
-              @showtimeId, 
-              (SELECT SeatId FROM Seat WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId)), 
-              @price
-            )
+            SELECT TicketDetailId FROM TicketDetail 
+            WHERE ShowtimeId = @showtimeId 
+              AND SeatId = (SELECT SeatId FROM Seat WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId))
           `);
+
+        if (!useLockFix && checkConflict.recordset.length > 0) {
+          // Lost Update: Overwrite the previous buyer's ticket detail to point to our ticket!
+          const existingDetailId = checkConflict.recordset[0].TicketDetailId;
+          await transaction.request()
+            .input("detailId", sql.Int, existingDetailId)
+            .input("ticketId", sql.VarChar, ticketId)
+            .query(`
+              UPDATE TicketDetail 
+              SET TicketId = @ticketId 
+              WHERE TicketDetailId = @detailId
+            `);
+        } else {
+          // Normal booking insert
+          await transaction.request()
+            .input("ticketId", sql.VarChar, ticketId)
+            .input("showtimeId", sql.Int, showtimeId)
+            .input("seatNumber", sql.VarChar, seat)
+            .input("price", sql.Decimal(18,2), pricePerSeat)
+            .query(`
+              INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)
+              VALUES (
+                @ticketId, 
+                @showtimeId, 
+                (SELECT SeatId FROM Seat WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId)), 
+                @price
+              )
+            `);
+        }
       }
 
       // Update showtime seats counter
@@ -441,6 +485,7 @@ export class TicketService {
 
       const ticket: BookedTicket = {
         id: ticketId,
+        showtimeId,
         movieId: 1,
         movieTitle,
         moviePoster,
@@ -466,6 +511,22 @@ export class TicketService {
       }
       throw err;
     }
+  }
+
+  async deleteTicket(ticketId: string): Promise<boolean> {
+    if (getMockMode()) {
+      mockTickets = mockTickets.filter(t => t.id !== ticketId);
+      return true;
+    }
+
+    const pool = await connectDatabase();
+    if (!pool) return false;
+
+    await pool.request()
+      .input("ticketId", sql.VarChar, ticketId)
+      .query("DELETE FROM Ticket WHERE TicketId = @ticketId");
+    
+    return true;
   }
 }
 

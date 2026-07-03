@@ -10,19 +10,38 @@ import UserProfilePage from "./pages/UserProfilePage";
 import AdminPortalPage from "./pages/AdminPortalPage";
 import type { Movie, Showtime } from "./data/movies";
 import { supabase } from "./lib/supabase";
-import { loadTickets, syncWithBackend } from "./lib/db";
+import { loadTickets, syncWithBackend, loadMovies, loadShowtimes, deleteTicket } from "./lib/db";
 import type { BookedTicket } from "./lib/db";
-import { Ticket } from "lucide-react";
+import { Ticket, Trash2 } from "lucide-react";
 import DevPanel from "./components/DevPanel";
 import type { ConcurrencyConfig, SqlLog } from "./components/DevPanel";
 
 type Page = "home" | "coming_soon" | "movie_detail" | "seats" | "booking_confirm" | "my_tickets" | "auth" | "profile" | "admin";
 
 export default function App() {
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<Page>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get("page") as Page) || "home";
+  });
   const [authSubMode, setAuthSubMode] = useState<"login" | "signup" | "forgot_password" | "reset_password">("login");
-  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
-  const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(null);
+  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlMovieId = params.get("movieId");
+    if (urlMovieId) {
+      const movies = loadMovies();
+      return movies.find(m => m.id === Number(urlMovieId)) || null;
+    }
+    return null;
+  });
+  const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlShowtimeId = params.get("showtimeId");
+    if (urlShowtimeId) {
+      const showtimes = loadShowtimes();
+      return showtimes.find(s => s.id === Number(urlShowtimeId)) || null;
+    }
+    return null;
+  });
   const [detailScrollToShowtimes, setDetailScrollToShowtimes] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [bookedSeats, setBookedSeats] = useState<string[]>([]);
@@ -38,7 +57,7 @@ export default function App() {
     scenario: "none",
     isolationLevel: "READ_COMMITTED",
     useLockFix: false,
-    latencyMs: 5000
+    latencyMs: 10000
   });
   const [sqlLogs, setSqlLogs] = useState<SqlLog[]>([]);
 
@@ -56,6 +75,20 @@ export default function App() {
       return next;
     });
   };
+
+  // Synchronize navigation state to URL query parameters
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("page", page);
+    if (selectedMovie) {
+      params.set("movieId", String(selectedMovie.id));
+    }
+    if (selectedShowtime) {
+      params.set("showtimeId", String(selectedShowtime.id));
+    }
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState(null, "", newUrl);
+  }, [page, selectedMovie, selectedShowtime]);
 
   useEffect(() => {
     syncWithBackend();
@@ -316,6 +349,17 @@ function MyTicketsPage({ userEmail, onHome, onAuth }: { userEmail: string | null
     }
   }, [userEmail]);
 
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Bạn có chắc chắn muốn xóa vé này khỏi hệ thống (SQL Server)?")) {
+      const success = await deleteTicket(id);
+      if (success) {
+        setTickets((prev) => prev.filter((t) => t.id !== id));
+      } else {
+        alert("Xóa vé thất bại!");
+      }
+    }
+  };
+
   const formatPrice = (n: number) => {
     return new Intl.NumberFormat("vi-VN").format(Math.round(n)) + "đ";
   };
@@ -351,18 +395,27 @@ function MyTicketsPage({ userEmail, onHome, onAuth }: { userEmail: string | null
               <div key={t.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col justify-between shadow-xl">
                 
                 {/* Header */}
-                <div className="bg-zinc-800/50 p-4 flex items-center gap-3 border-b border-zinc-800">
+                <div className="bg-zinc-800/50 p-4 flex items-center gap-3 border-b border-zinc-800 relative">
                   <img src={t.moviePoster} alt={t.movieTitle} className="w-12 h-16 object-cover rounded-lg flex-shrink-0 bg-zinc-800" />
                   <div className="min-w-0 flex-1">
                     <h3 className="text-white font-bold truncate text-sm sm:text-base">{t.movieTitle}</h3>
                     <p className="text-gray-400 text-xs mt-1">{t.cinemaName}</p>
                     <p className="text-gray-500 text-[10px] mt-0.5">Đặt lúc: {t.bookedAt}</p>
                   </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                    t.status === "used" ? "bg-zinc-800 text-gray-500 border border-zinc-700" : "bg-green-600/10 text-green-400 border border-green-500/20"
-                  }`}>
-                    {t.status === "used" ? "Đã dùng" : "Chưa dùng"}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                      t.status === "used" ? "bg-zinc-800 text-gray-500 border border-zinc-700" : "bg-green-600/10 text-green-400 border border-green-500/20"
+                    }`}>
+                      {t.status === "used" ? "Đã dùng" : "Chưa dùng"}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(t.id)}
+                      className="p-1 text-gray-500 hover:text-red-400 rounded-lg hover:bg-white/5 transition-colors"
+                      title="Xóa vé"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Details */}

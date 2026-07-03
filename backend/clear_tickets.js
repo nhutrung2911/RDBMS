@@ -16,12 +16,12 @@ async function clear() {
   try {
     const pool = await sql.connect(config);
     
-    console.log("Dang xoa cac ve test CNS4J3KI va CNSIPGWP de giai phong ghe A2 va A5...");
+    console.log("Dang xoa tat ca cac ve cua khach hang de giai phong toan bo ghe (giu lai ve mau CNS_REVENUE_DEL)...");
     await pool.request().query(`
-      DELETE FROM TicketDetail WHERE TicketId IN ('CNS4J3KI', 'CNSIPGWP');
-      DELETE FROM Ticket WHERE TicketId IN ('CNS4J3KI', 'CNSIPGWP');
+      DELETE FROM TicketDetail WHERE TicketId != 'CNS_REVENUE_DEL';
+      DELETE FROM Ticket WHERE TicketId != 'CNS_REVENUE_DEL';
     `);
-    console.log("Xoa cac ve test thanh cong!");
+    console.log("Giai phong toan bo ghe thanh cong!");
 
     // Tu dong khoi phuc lai ve mau CNS_REVENUE_DEL neu no bi xoa trong luc chay kich ban bao cao
     const checkRevenueDel = await pool.request().query(`

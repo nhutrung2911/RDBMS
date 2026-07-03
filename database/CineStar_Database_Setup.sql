@@ -520,11 +520,26 @@ BEGIN
     SET TRANSACTION ISOLATION LEVEL READ COMMITTED; -- Chạy dưới mức cô lập thông thường
     BEGIN TRANSACTION;
     BEGIN TRY
+        -- Kiểm tra TicketId đã tồn tại chưa
+        IF EXISTS (SELECT 1 FROM Ticket WHERE TicketId = @TicketId)
+            THROW 50004, N'TicketId đã tồn tại.', 1;
+
+        -- Lấy RoomId tương ứng của suất chiếu
+        DECLARE @RoomId INT;
+        SELECT @RoomId = RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId;
+
+        -- Kiểm tra các ghế có tồn tại trong phòng không
+        IF EXISTS (
+            SELECT 1 FROM STRING_SPLIT(@SeatNumbers, ',') 
+            WHERE value NOT IN (SELECT SeatNumber FROM Seat WHERE RoomId = @RoomId)
+        )
+            THROW 50001, N'Một hoặc nhiều ghế được chọn không tồn tại.', 1;
+
         -- Tách chuỗi ghế thành bảng tạm
         DECLARE @SeatsTable TABLE (SeatNumber VARCHAR(10), SeatId INT);
         INSERT INTO @SeatsTable (SeatNumber, SeatId)
         SELECT value, s.SeatId FROM STRING_SPLIT(@SeatNumbers, ',')
-        INNER JOIN Seat s ON s.SeatNumber = value AND s.RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId);
+        INNER JOIN Seat s ON s.SeatNumber = value AND s.RoomId = @RoomId;
 
         -- KIỂM TRA TRẠNG THÁI GHẾ KHÔNG KHÓA (Giao tác khác đọc thấy TRỐNG và ghi đè sau đó)
         IF EXISTS (
@@ -533,13 +548,14 @@ BEGIN
             WHERE td.ShowtimeId = @ShowtimeId AND td.SeatId IN (SELECT SeatId FROM @SeatsTable) AND t.Status != N'canceled'
         )
         BEGIN
-            RAISERROR(N'Ghế đã có người đặt thành công trước đó!', 16, 1);
+            THROW 50003, N'Ghế đã có người đặt thành công trước đó!', 1;
         END
 
         -- Giả lập độ trễ giao dịch
         IF @LatencyMs > 0
         BEGIN
-            DECLARE @DelayStr VARCHAR(20) = '00:00:' + CAST((@LatencyMs/1000) AS VARCHAR) + '.' + CAST((@LatencyMs%1000) AS VARCHAR);
+            DECLARE @DelayStr CHAR(12);
+            SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
             WAITFOR DELAY @DelayStr;
         END
 
@@ -569,10 +585,25 @@ BEGIN
     SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     BEGIN TRANSACTION;
     BEGIN TRY
+        -- Kiểm tra TicketId đã tồn tại chưa
+        IF EXISTS (SELECT 1 FROM Ticket WHERE TicketId = @TicketId)
+            THROW 50004, N'TicketId đã tồn tại.', 1;
+
+        -- Lấy RoomId tương ứng của suất chiếu
+        DECLARE @RoomId INT;
+        SELECT @RoomId = RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId;
+
+        -- Kiểm tra các ghế có tồn tại trong phòng không
+        IF EXISTS (
+            SELECT 1 FROM STRING_SPLIT(@SeatNumbers, ',') 
+            WHERE value NOT IN (SELECT SeatNumber FROM Seat WHERE RoomId = @RoomId)
+        )
+            THROW 50001, N'Một hoặc nhiều ghế được chọn không tồn tại.', 1;
+
         DECLARE @SeatsTable TABLE (SeatNumber VARCHAR(10), SeatId INT);
         INSERT INTO @SeatsTable (SeatNumber, SeatId)
         SELECT value, s.SeatId FROM STRING_SPLIT(@SeatNumbers, ',')
-        INNER JOIN Seat s ON s.SeatNumber = value AND s.RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId);
+        INNER JOIN Seat s ON s.SeatNumber = value AND s.RoomId = @RoomId;
 
         -- SỬ DỤNG UPDLOCK VÀ HOLDLOCK TRÊN BẢNG SEAT ĐỂ GIỮ KHÓA ĐỌC ĐẾN KHI COMMIT (TRÁNH BYPASS)
         DECLARE @LockDummy INT;
@@ -585,12 +616,13 @@ BEGIN
             WHERE td.ShowtimeId = @ShowtimeId AND td.SeatId IN (SELECT SeatId FROM @SeatsTable) AND t.Status != N'canceled'
         )
         BEGIN
-            RAISERROR(N'Ghế đã có người đặt thành công trước đó!', 16, 1);
+            THROW 50003, N'Ghế đã có người đặt thành công trước đó!', 1;
         END
 
         IF @LatencyMs > 0
         BEGIN
-            DECLARE @DelayStr VARCHAR(20) = '00:00:' + CAST((@LatencyMs/1000) AS VARCHAR) + '.' + CAST((@LatencyMs%1000) AS VARCHAR);
+            DECLARE @DelayStr CHAR(12);
+            SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
             WAITFOR DELAY @DelayStr;
         END
 
@@ -649,6 +681,49 @@ END;
 GO
 
 
+-- [GIẢ LẬP] Giao tác đặt vé để minh họa Dirty Read
+CREATE PROCEDURE usp_DirtyRead_Demo
+    @TicketId VARCHAR(20),
+    @CustomerId INT,
+    @ShowtimeId INT,
+    @SeatId INT,
+    @Price DECIMAL(18,2),
+    @LatencyMs INT = 10000,
+    @ShouldRollback BIT = 1
+AS
+BEGIN
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        -- Thêm hóa đơn vé tạm thời
+        INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, Status)
+        VALUES (@TicketId, @CustomerId, GETDATE(), @Price, N'MoMo', N'valid');
+        
+        -- Thêm chi tiết vé tạm thời cho ghế
+        INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)
+        VALUES (@TicketId, @ShowtimeId, @SeatId, @Price);
+        
+        -- Giả lập độ trễ giao dịch chưa commit
+        DECLARE @DelayStr CHAR(12);
+        SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
+        WAITFOR DELAY @DelayStr;
+        
+        IF @ShouldRollback = 1
+        BEGIN
+            ROLLBACK TRANSACTION;
+        END
+        ELSE
+        BEGIN
+            COMMIT TRANSACTION;
+        END
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
+
 -- ==================================================================================
 -- 4.7.3. ĐỌC KHÔNG LẶP LẠI (Non-repeatable Read) & 4.8.3. SỬA LỖI (REPEATABLE READ)
 -- ==================================================================================
@@ -666,7 +741,8 @@ BEGIN
 
     IF @LatencyMs > 0
     BEGIN
-        DECLARE @DelayStr VARCHAR(20) = '00:00:' + CAST((@LatencyMs/1000) AS VARCHAR) + '.' + CAST((@LatencyMs%1000) AS VARCHAR);
+        DECLARE @DelayStr CHAR(12);
+        SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
         WAITFOR DELAY @DelayStr;
     END
 
@@ -690,7 +766,8 @@ BEGIN
 
     IF @LatencyMs > 0
     BEGIN
-        DECLARE @DelayStr VARCHAR(20) = '00:00:' + CAST((@LatencyMs/1000) AS VARCHAR) + '.' + CAST((@LatencyMs%1000) AS VARCHAR);
+        DECLARE @DelayStr CHAR(12);
+        SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
         WAITFOR DELAY @DelayStr;
     END
 
@@ -718,7 +795,8 @@ BEGIN
 
     IF @LatencyMs > 0
     BEGIN
-        DECLARE @DelayStr VARCHAR(20) = '00:00:' + CAST((@LatencyMs/1000) AS VARCHAR) + '.' + CAST((@LatencyMs%1000) AS VARCHAR);
+        DECLARE @DelayStr CHAR(12);
+        SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
         WAITFOR DELAY @DelayStr;
     END
 
@@ -741,7 +819,8 @@ BEGIN
 
     IF @LatencyMs > 0
     BEGIN
-        DECLARE @DelayStr VARCHAR(20) = '00:00:' + CAST((@LatencyMs/1000) AS VARCHAR) + '.' + CAST((@LatencyMs%1000) AS VARCHAR);
+        DECLARE @DelayStr CHAR(12);
+        SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
         WAITFOR DELAY @DelayStr;
     END
 
@@ -765,21 +844,36 @@ BEGIN
     SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     BEGIN TRANSACTION;
     BEGIN TRY
+        -- Kiểm tra TicketId đã tồn tại chưa
+        IF EXISTS (SELECT 1 FROM Ticket WHERE TicketId = @TicketId)
+            THROW 50004, N'TicketId đã tồn tại.', 1;
+
+        -- Lấy RoomId tương ứng của suất chiếu
+        DECLARE @RoomId INT;
+        SELECT @RoomId = RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId;
+
         -- Lấy SeatId tương ứng
         DECLARE @SeatId1 INT, @SeatId2 INT;
-        SELECT @SeatId1 = SeatId FROM Seat WHERE SeatNumber = @Seat1 AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId);
-        SELECT @SeatId2 = SeatId FROM Seat WHERE SeatNumber = @Seat2 AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId);
+        SELECT @SeatId1 = SeatId FROM Seat WHERE SeatNumber = @Seat1 AND RoomId = @RoomId;
+        SELECT @SeatId2 = SeatId FROM Seat WHERE SeatNumber = @Seat2 AND RoomId = @RoomId;
+
+        -- Kiểm tra ghế có tồn tại không
+        IF @SeatId1 IS NULL
+            THROW 50001, N'Ghế thứ nhất không tồn tại.', 1;
+        IF @SeatId2 IS NULL
+            THROW 50002, N'Ghế thứ hai không tồn tại.', 1;
 
         -- Bước 1: Khóa ghế thứ nhất trong Seat
         DECLARE @Dummy1 INT;
         SELECT @Dummy1 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId1;
         IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId1)
-            RAISERROR(N'Ghế 1 đã bị khóa!', 16, 1);
+            THROW 50003, N'Ghế thứ nhất đã được đặt trước đó.', 1;
 
         -- Giả lập độ trễ giữa 2 bước khóa
         IF @LatencyMs > 0
         BEGIN
-            DECLARE @DelayStr VARCHAR(20) = '00:00:' + CAST((@LatencyMs/1000) AS VARCHAR) + '.' + CAST((@LatencyMs%1000) AS VARCHAR);
+            DECLARE @DelayStr CHAR(12);
+            SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
             WAITFOR DELAY @DelayStr;
         END
 
@@ -787,7 +881,7 @@ BEGIN
         DECLARE @Dummy2 INT;
         SELECT @Dummy2 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId2;
         IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId2)
-            RAISERROR(N'Ghế 2 đã bị khóa!', 16, 1);
+            THROW 50003, N'Ghế thứ hai đã được đặt trước đó.', 1;
 
         -- Thực hiện đặt vé
         INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, Status)
@@ -815,10 +909,24 @@ BEGIN
     SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     BEGIN TRANSACTION;
     BEGIN TRY
+        -- Kiểm tra TicketId đã tồn tại chưa
+        IF EXISTS (SELECT 1 FROM Ticket WHERE TicketId = @TicketId)
+            THROW 50004, N'TicketId đã tồn tại.', 1;
+
+        -- Lấy RoomId tương ứng của suất chiếu
+        DECLARE @RoomId INT;
+        SELECT @RoomId = RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId;
+
         -- Lấy SeatId tương ứng
         DECLARE @SeatId1 INT, @SeatId2 INT;
-        SELECT @SeatId1 = SeatId FROM Seat WHERE SeatNumber = @Seat1 AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId);
-        SELECT @SeatId2 = SeatId FROM Seat WHERE SeatNumber = @Seat2 AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @ShowtimeId);
+        SELECT @SeatId1 = SeatId FROM Seat WHERE SeatNumber = @Seat1 AND RoomId = @RoomId;
+        SELECT @SeatId2 = SeatId FROM Seat WHERE SeatNumber = @Seat2 AND RoomId = @RoomId;
+
+        -- Kiểm tra ghế có tồn tại không
+        IF @SeatId1 IS NULL
+            THROW 50001, N'Ghế thứ nhất không tồn tại.', 1;
+        IF @SeatId2 IS NULL
+            THROW 50002, N'Ghế thứ hai không tồn tại.', 1;
 
         -- SẮP XẾP: Ghế có ID nhỏ hơn luôn được khóa trước tiên để ngăn chặn hiện tượng khóa chéo (Deadlock)
         DECLARE @Temp INT;
@@ -833,11 +941,12 @@ BEGIN
         DECLARE @Dummy1 INT;
         SELECT @Dummy1 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId1;
         IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId1)
-            RAISERROR(N'Ghế 1 đã bị khóa!', 16, 1);
+            THROW 50003, N'Ghế thứ nhất đã được đặt trước đó.', 1;
 
         IF @LatencyMs > 0
         BEGIN
-            DECLARE @DelayStr VARCHAR(20) = '00:00:' + CAST((@LatencyMs/1000) AS VARCHAR) + '.' + CAST((@LatencyMs%1000) AS VARCHAR);
+            DECLARE @DelayStr CHAR(12);
+            SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
             WAITFOR DELAY @DelayStr;
         END
 
@@ -845,7 +954,7 @@ BEGIN
         DECLARE @Dummy2 INT;
         SELECT @Dummy2 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId2;
         IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId2)
-            RAISERROR(N'Ghế 2 đã bị khóa!', 16, 1);
+            THROW 50003, N'Ghế thứ hai đã được đặt trước đó.', 1;
 
         -- Thực hiện đặt vé
         INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, Status)

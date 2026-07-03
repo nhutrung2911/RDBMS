@@ -242,7 +242,7 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                         <input
                           type="range"
                           min="0"
-                          max="5000"
+                          max="10000"
                           step="500"
                           value={config.latencyMs}
                           onChange={(e) => updateSetting("latencyMs", Number(e.target.value))}
@@ -251,8 +251,8 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                       </div>
                     </div>
 
-                    {/* Apply Lock Fix switch (For Lost Update and Deadlock) */}
-                    {(config.scenario === "lost_update" || config.scenario === "deadlock") && (
+                    {/* Apply Lock Fix switch (For Lost Update, Deadlock, and Manual/None scenario) */}
+                    {(config.scenario === "none" || config.scenario === "lost_update" || config.scenario === "deadlock") && (
                       <div className="flex items-center justify-between bg-zinc-900/60 p-3 rounded-xl border border-zinc-800">
                         <div className="flex gap-2">
                           {config.useLockFix ? (
@@ -265,7 +265,9 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                               {config.useLockFix ? "Đã áp dụng cách khắc phục" : "Chưa khắc phục lỗi (Sử dụng SP cũ)"}
                             </h4>
                             <p className="text-[10px] text-gray-500 mt-0.5">
-                              {config.scenario === "lost_update" ? "Dùng SP có UPDLOCK, HOLDLOCK" : "Sắp xếp tăng dần ID ghế trước khi khóa"}
+                              {config.scenario === "lost_update" ? "Dùng SP có UPDLOCK, HOLDLOCK" : 
+                               config.scenario === "deadlock" ? "Sắp xếp tăng dần ID ghế trước khi khóa" : 
+                               "Kích hoạt UPDLOCK, HOLDLOCK và Sắp xếp tự động"}
                             </p>
                           </div>
                         </div>
@@ -282,6 +284,18 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                     )}
                   </>
                 )}
+
+                {/* Reset local storage cache button */}
+                <button
+                  onClick={() => {
+                    localStorage.clear();
+                    window.location.reload();
+                  }}
+                  className="w-full bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-gray-300 hover:text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2"
+                >
+                  <RotateCcw className="w-4 h-4 text-amber-500 animate-spin-hover" />
+                  Xóa bộ nhớ đệm (Reset dữ liệu Web)
+                </button>
               </div>
             )}
 

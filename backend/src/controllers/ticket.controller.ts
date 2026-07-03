@@ -89,6 +89,13 @@ export async function clearLocks(req: ConcurrencyRequest, res: Response, next: N
 }
 
 export async function bookTicket(req: ConcurrencyRequest, res: Response, next: NextFunction) {
+  let isAborted = false;
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      isAborted = true;
+    }
+  });
+
   try {
     const { 
       showtimeId, seats, movieTitle, moviePoster, cinemaName, 
@@ -113,10 +120,21 @@ export async function bookTicket(req: ConcurrencyRequest, res: Response, next: N
       showtimeTime,
       totalPrice,
       paymentMethod,
-      combos
+      combos,
+      clientAborted: () => isAborted
     });
 
     res.json({ success: true, ticket });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteTicket(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const success = await ticketService.deleteTicket(id);
+    res.json({ success });
   } catch (error) {
     next(error);
   }

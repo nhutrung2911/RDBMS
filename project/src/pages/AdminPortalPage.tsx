@@ -1739,13 +1739,7 @@ export default function AdminPortalPage({
                             // Lấy danh sách ghế đã bán cho suất chiếu này
                             const soldSeatsForShowtime = new Set<string>();
                             ticketsList
-                              .filter(t =>
-                                t.movieId === selectedSalesMovie.id &&
-                                t.cinemaName === selectedSalesCinema?.name &&
-                                t.showtimeDate === selectedSalesShowtime.date &&
-                                t.showtimeTime === selectedSalesShowtime.time &&
-                                t.hall === selectedSalesShowtime.hall
-                              )
+                              .filter(t => t.showtimeId === selectedSalesShowtime.id && t.status !== 'canceled')
                               .forEach(t => t.seats.forEach(s => soldSeatsForShowtime.add(s)));
 
                             // Ghế đã bán mặc định để sinh động

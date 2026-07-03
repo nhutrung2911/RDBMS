@@ -29,65 +29,128 @@ Tài liệu này hướng dẫn chi tiết cách tự thao tác trực tiếp tr
 
 ---
 
-## 1. Mất cập nhật (Lost Update)
+## 1. Hiện tượng Lost Update (Ghi đè dữ liệu)
 
-### 📌 Nguyên lý tương tranh
-Khách A và Khách B cùng mở sơ đồ ghế và chọn cùng ghế `A5`. Khi cả hai cùng nhấn thanh toán, do không sử dụng khóa độc quyền để giữ hàng, cả hai luồng đều đọc thấy ghế trống và thực hiện chèn vé đè lên nhau.
+### 📌 Mô tả
+Hiện tượng Lost Update xảy ra khi hai giao dịch cùng đọc một trạng thái dữ liệu ban đầu và cùng thực hiện cập nhật dựa trên trạng thái đó. Nếu hệ thống không có cơ chế kiểm soát tương tranh phù hợp, kết quả cập nhật của một giao dịch có thể bị giao dịch còn lại ghi đè, làm mất dữ liệu của giao dịch trước.
 
----
-
-### 🖥️ Các bước thực hiện Demo
-
-#### Bước 1: Gây lỗi trực tiếp trên giao diện đặt vé
-1. Trên cả hai màn hình, cùng chọn phim **Dune: Part Two** -> chọn suất chiếu **09:30 (Hall 1)** ngày hôm nay.
-2. Cả hai cùng click chọn ghế **A5** (ghế chuyển sang màu cam).
-3. Nhấn **"Tiếp theo"** ở cả 2 bên để cùng tiến tới trang **Xác nhận đặt vé (Trang QR Thanh toán)**.
-4. **Hành động click tương tranh**:
-   * Click nút **"Xác nhận đặt vé"** ở **Màn hình A (Trái)**.
-   * *Ngay lập tức* (trong vòng 5 giây khi giao dịch A đang xử lý), di chuột sang click nút **"Xác nhận đặt vé"** ở **Màn hình B (Phải)**.
-5. **Hiện tượng**: Cả hai màn hình đều báo đặt vé **Thành công**! Tuy nhiên, khi kiểm tra CSDL, vé của B đã ghi đè và xóa mất cập nhật của A.
+Trong hệ thống đặt vé xem phim, hiện tượng này có thể xảy ra khi hai khách hàng gần như đồng thời đặt cùng một ghế.
 
 ---
 
-### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
-1. Trên **cả hai màn hình A & B**:
-   * Mở **Dev Panel** -> Bật nút: **"Đã áp dụng cách khắc phục"** (UPDLOCK, HOLDLOCK).
-2. Lặp lại các thao tác đặt trùng ghế khác (ví dụ: ghế **A6**):
-   * Cả hai chọn ghế **A6** -> vào trang xác nhận QR.
-   * Click **"Xác nhận đặt vé"** bên màn hình A trước.
-   * Ngay sau đó, click **"Xác nhận đặt vé"** bên màn hình B.
-3. **Hiện tượng sau khi sửa**:
-   * Màn hình B bị xoay vòng chờ (Block) vì giao dịch của A đang giữ khóa UPDLOCK trên ghế.
-   * Sau khi A hoàn tất thành công (hết 5 giây), B được tiếp tục chạy nhưng CSDL báo ghế đã bán -> Giao dịch B hiển thị lỗi: `"Ghế A6 đã bị bán trước đó. Giao dịch thất bại!"` và rollback an toàn.
+### 🖥️ Kịch bản xảy ra lỗi (Khi chưa sửa lỗi)
+
+**Điều kiện**
+* Có hai khách hàng: Khách A (Session 1) và Khách B (Session 2).
+* Cả hai cùng chọn ghế **G10** của cùng một suất chiếu.
+* Hệ thống chưa áp dụng cơ chế kiểm soát tương tranh.
+
+**Các bước thực hiện**
+1. **Hai khách cùng đọc dữ liệu**: Khách A và Khách B gần như đồng thời mở sơ đồ ghế. Hệ thống kiểm tra trạng thái ghế G10 và đều trả về: **Ghế G10 đang trống**. Cả hai giao dịch đều lưu trạng thái này vào bộ nhớ cục bộ và tiếp tục thực hiện quá trình đặt vé.
+2. **Khách A bắt đầu đặt vé**: Khách A nhấn Đặt vé. Giao dịch A cập nhật thông tin đặt ghế G10 cho Khách A. Để mô phỏng hiện tượng tương tranh, hệ thống tạo một khoảng thời gian chờ 10 giây trước khi hoàn tất giao dịch.
+3. **Khách B cũng đặt cùng ghế**: Trong khi giao dịch của Khách A vẫn chưa hoàn tất (đang trong 10 giây chờ), Khách B cũng nhấn Đặt vé. Do Khách B vẫn sử dụng dữ liệu đã đọc ở Bước 1 nên hệ thống tiếp tục cho rằng: **Ghế G10 vẫn còn trống**. Sau đó, giao dịch B cũng thực hiện cập nhật thông tin đặt ghế G10.
+4. **Xảy ra Lost Update**: Do hệ thống không kiểm tra lại dữ liệu trước khi ghi và không có cơ chế đồng bộ giữa hai giao dịch, giao dịch của Khách B hoàn tất sau và ghi đè kết quả cập nhật của Khách A.
+5. **Hậu quả**:
+   * Hệ thống đều thông báo Đặt vé thành công cho cả hai khách:
+     * Khách A: Đặt vé thành công.
+     * Khách B: Đặt vé thành công.
+   * Tuy nhiên, trong cơ sở dữ liệu: Chỉ có một vé ghế G10 được ghi nhận thuộc về khách hàng đặt sau (Khách B). Thông tin đặt vé của Khách A đã bị ghi đè và bị mất khỏi cơ sở dữ liệu.
+
+---
+
+### 🛡️ Giải pháp khắc phục (Dùng Dev Panel)
+
+#### Áp dụng kỹ thuật Validation-Based Concurrency Control (Optimistic Concurrency Control)
+Để ngăn chặn hiện tượng Lost Update, hệ thống áp dụng kỹ thuật xác nhận tính hợp lệ (Validation-Based Concurrency Control). Thay vì ghi dữ liệu trực tiếp xuống cơ sở dữ liệu ngay khi người dùng thực hiện thao tác, mỗi giao dịch sẽ làm việc trên một bản sao dữ liệu cục bộ. Trước khi Commit, hệ thống sẽ tiến hành kiểm tra xem dữ liệu đã bị giao dịch khác thay đổi hay chưa. Nếu phát hiện có xung đột, giao dịch sẽ bị hủy và phải thực hiện lại.
+
+**Quy trình hoạt động sau khi sửa**
+1. **Giai đoạn 1 – Read Phase**: Khách A và Khách B cùng đọc trạng thái ghế G10. Cả hai đều nhận được kết quả: **Ghế G10 đang trống**. Thông tin này chỉ được lưu trong bộ nhớ cục bộ của từng giao dịch.
+2. **Giai đoạn 2 – Validation Phase**: Khi chuẩn bị Commit, hệ thống tiến hành so sánh Read Set (tập dữ liệu đã đọc) và Write Set (tập dữ liệu sẽ ghi) với các giao dịch đã Commit trước đó.
+   * Giả sử giao dịch của Khách A hoàn thành trước và được xác nhận hợp lệ.
+   * Giao dịch của Khách B được kiểm tra sau: Hệ thống phát hiện ghế G10 đã được Khách A cập nhật, dẫn đến dữ liệu mà Khách B đọc trước đó không còn hợp lệ. Do đó, **Validation của Khách B thất bại**.
+3. **Giai đoạn 3 – Write Phase**:
+   * Chỉ giao dịch của Khách A được phép ghi dữ liệu xuống cơ sở dữ liệu và Commit.
+   * Giao dịch của Khách B bị **Rollback** và hệ thống yêu cầu thực hiện lại thao tác đặt vé. Khi Khách B đọc lại dữ liệu, hệ thống hiển thị: **Ghế G10 đã được đặt**. Do đó, Khách B không thể tiếp tục đặt ghế này.
+
+**Kết quả sau khi áp dụng giải pháp**
+* Chỉ một giao dịch được phép cập nhật dữ liệu.
+* Không xảy ra hiện tượng ghi đè dữ liệu giữa các giao dịch.
+* Dữ liệu trong cơ sở dữ liệu luôn phản ánh đúng trạng thái thực tế, ngăn chặn hiệu quả hiện tượng Lost Update.
 
 ---
 
 ## 2. Đọc dữ liệu rác (Dirty Read)
 
-### 📌 Nguyên lý tương tranh
-Giao dịch A đang thực hiện thanh toán mua ghế `A2` (chưa commit). Giao dịch B thực hiện đọc trạng thái sơ đồ ghế. Do B chạy dưới mức cô lập cho phép đọc dữ liệu chưa commit, B thấy ghế đã bán. Sau đó giao dịch của A bị hủy hoặc rollback, nhưng B đã đọc phải thông tin rác.
+### 📌 Kịch bản minh họa Dirty Read trong CSDL
+
+**Mục tiêu**
+Minh họa hiện tượng Dirty Read khi một giao tác đọc phải dữ liệu chưa được COMMIT của một giao tác khác.
+
+**Điều kiện**
+* Có hai khách hàng: Khách A (Session 1) và Khách B (Session 2).
+* Cả hai cùng chọn một ghế.
+* Session 2 sử dụng mức cô lập **READ UNCOMMITTED**.
 
 ---
 
 ### 🖥️ Các bước thực hiện Demo
 
-#### Bước 1: Gây lỗi trực tiếp trên giao diện
-1. Thiết lập mức cô lập đọc rác cho Khách B: Trên **Màn hình B (Phải)**, mở **Dev Panel** -> chọn Isolation Level là **READ UNCOMMITTED**.
-2. Trên cả hai màn hình, cùng chọn phim **Dune: Part Two**, suất chiếu **09:30**.
-3. **Màn hình A (Trái)**: Chọn ghế **A2** -> nhấn **"Tiếp theo"** -> nhấn **"Xác nhận đặt vé"**. Giao dịch A đang thực hiện giữ ghế trong vòng 5 giây (chưa commit).
-4. **Màn hình B (Phải)**: *Ngay lập tức* (trong 5 giây đó), nhấn **F5** để tải lại sơ đồ ghế.
-5. **Hiện tượng**:
-   * Màn hình B hiển thị ghế **A2** màu đỏ (Đã bán) vì đã đọc được dữ liệu chưa commit của A.
-   * Hết 5 giây, giao dịch A gặp lỗi thanh toán hoặc bạn đóng tab (giả lập lỗi) -> Giao dịch A bị **Rollback**. Ghế `A2` thực chất vẫn trống, nhưng B đã đọc sai thông tin.
+#### Bước 1: Khách A chọn ghế
+1. Khách A mở trang chọn ghế và chọn ghế **A12**.
+2. Sau đó nhấn *Tiếp tục* đến trang thanh toán.
+   > [!NOTE]
+   > Ở bước này hệ thống chưa ghi dữ liệu xuống SQL Server, chỉ giữ thông tin ghế trên giao diện để mô phỏng quy trình thanh toán thực tế (Pending Lock).
+
+#### Bước 2: Khách A xác nhận thanh toán (Demo Dirty Read)
+1. Khách A nhấn nút: **"Tôi đã thanh toán thành công"**
+2. Backend gọi Stored Procedure:
+   ```sql
+   EXEC usp_DirtyRead_Demo
+   ```
+3. Stored Procedure thực hiện:
+   ```sql
+   BEGIN TRANSACTION
+   INSERT INTO Ticket (...)
+   INSERT INTO TicketDetail (...) -- Ghế A12 được ghi vào CSDL
+   WAITFOR DELAY '00:00:10' -- Transaction vẫn đang mở (chưa COMMIT)
+   ```
+   *(Trong khoảng 10 giây này, dữ liệu đã tồn tại trong SQL Server nhưng chưa được COMMIT)*.
+
+#### Bước 3: Khách B đọc dữ liệu
+1. Trong lúc Session 1 đang chờ (đang hiện vòng quay xử lý), tại Dev Panel của màn hình B:
+   * Thiết lập Isolation Level: **READ UNCOMMITTED**
+2. Khách B nhấn **F5** hoặc *Làm mới sơ đồ ghế*.
+3. Hệ thống đọc dữ liệu từ SQL Server:
+   * Do sử dụng `READ UNCOMMITTED`, Session 2 đọc được bản ghi `TicketDetail` chưa commit.
+4. **Kết quả hiển thị**: Ghế **A12 = Đã đặt** (màu xám).
+
+#### Bước 4: Giao dịch bị hủy (Rollback)
+1. Sau khi hết thời gian chờ 10 giây, Stored Procedure thực hiện:
+   ```sql
+   ROLLBACK TRANSACTION;
+   ```
+2. Toàn bộ dữ liệu vừa `INSERT` bị hủy. Ghế **A12** trở về trạng thái **Trống**.
+
+#### Bước 5: Khách B đọc lại
+1. Khách B tiếp tục nhấn **F5**.
+2. **Kết quả**: Ghế **A12 = Trống** (màu xanh).
+
+**Kết luận**
+* Trong lần đọc đầu tiên, khách B nhìn thấy **Ghế A12 = Đã đặt**.
+* Nhưng sau khi giao dịch của khách A `ROLLBACK`, ghế A12 lại trở về **Ghế A12 = Trống**.
+* Điều này chứng tỏ khách B đã đọc phải dữ liệu chưa được COMMIT của một giao tác khác. Đây chính là hiện tượng **Dirty Read**.
 
 ---
 
-### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
-1. Trên **Dev Panel của màn hình B**, chuyển đổi Isolation Level về **READ COMMITTED** (mức mặc định ngăn chặn đọc rác).
-2. Lặp lại thao tác đặt ghế A2 ở màn hình A.
-3. Trong lúc A đang xoay vòng chờ thanh toán, màn hình B bấm F5 tải lại sơ đồ ghế.
-4. **Hiện tượng sau khi sửa**:
-   * Màn hình B sẽ bị treo xoay vòng chờ tải trang (Block) hoặc sơ đồ ghế chỉ hiện thị `A2` ở trạng thái **Trống** cho đến khi giao dịch của A thực sự Commit hoặc Rollback xong, ngăn ngừa hoàn toàn Dirty Read.
+### 🛡️ Phiên bản sửa lỗi (READ COMMITTED)
+1. Đổi Isolation Level của Session 2 thành: **READ COMMITTED**
+2. Lặp lại kịch bản. Lúc này:
+   * Session 2 sẽ không đọc được dữ liệu chưa commit.
+   * SQL Server sẽ chờ cho đến khi Session 1 COMMIT hoặc ROLLBACK.
+   * Sau khi Session 1 kết thúc:
+     * Nếu **COMMIT** → ghế A12 hiển thị **Đã đặt**.
+     * Nếu **ROLLBACK** → ghế A12 hiển thị **Trống**.
+   * Vì Session 2 không bao giờ đọc được dữ liệu chưa commit nên Dirty Read được loại bỏ hoàn toàn.
 
 ---
 
@@ -104,7 +167,7 @@ Thủ quỹ A truy vấn tổng doanh thu lần 1. Trong lúc giao dịch A chư
 1. Trên **Màn hình A (Trái)**, vào **Admin Portal** -> **Báo cáo Doanh thu**.
 2. Nhấn nút **"Xem báo cáo (Tương tranh)"** (Giao dịch sử dụng mặc định READ COMMITTED).
 3. **Hành động tương tranh**:
-   * Giao dịch A đọc doanh thu lần 1 (ví dụ: hiển thị 10,000,000đ) và treo chờ 5 giây.
+   * Giao dịch A đọc doanh thu lần 1 (ví dụ: hiển thị 10,000,000đ) và treo chờ 10 giây.
    * CSDL tự động kích hoạt một tiến trình nền thực hiện xóa vé mẫu `CNS_REVENUE_DEL` trị giá `1,200,000đ` (đại diện Khách B hủy vé thành công).
    * Giao dịch A thực hiện truy vấn lần 2.
 4. **Hiện tượng**: Tổng doanh thu lần 2 bị **giảm đi 1,200,000đ** so với lần 1. Hệ thống hiển thị cảnh báo lỗi tương tranh không nhất quán trên Console log của trang Admin.
@@ -136,9 +199,9 @@ Khách A truy vấn danh sách suất chiếu của phim lần 1. Trong lúc đ�
 2. Chọn Phim, Rạp và Ngày chiếu.
 3. Click vào nút **"Tra cứu suất chiếu (Tương tranh Phantom)"** (mức cô lập mặc định REPEATABLE READ).
 4. **Hành động tương tranh**:
-   * Giao dịch A quét đếm suất chiếu lần 1 và treo chờ 5 giây.
-   * Trong 5 giây đó, hệ thống chạy ngầm lệnh `INSERT` thêm một suất chiếu bóng ma mới vào bảng `Showtime` (đại diện Admin B chèn thành công).
-   * Hết 5 giây, giao dịch A quét lại lần 2.
+   * Giao dịch A quét đếm suất chiếu lần 1 và treo chờ 10 giây.
+   * Trong 10 giây đó, hệ thống chạy ngầm lệnh `INSERT` thêm một suất chiếu bóng ma mới vào bảng `Showtime` (đại diện Admin B chèn thành công).
+   * Hết 10 giây, giao dịch A quét lại lần 2.
 5. **Hiện tượng**: Suất chiếu mới ID 999 (phòng PHANTOM) xuất hiện trên màn hình hiển thị của A. Nhật ký SQL báo lỗi Phantom Read.
 
 ---

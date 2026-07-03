@@ -27,7 +27,7 @@ export interface BookTicketParams {
   latencyMs: number;
 }
 
-export async function bookTicketAPI(params: BookTicketParams) {
+export async function bookTicketAPI(params: BookTicketParams, signal?: AbortSignal) {
   const { isolationLevel, useLockFix, latencyMs, ...body } = params;
   
   const res = await fetch(`${BASE_URL}/tickets/book`, {
@@ -38,12 +38,24 @@ export async function bookTicketAPI(params: BookTicketParams) {
       "x-use-lock-fix": String(useLockFix),
       "x-latency-ms": String(latencyMs)
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   });
 
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.message || "Giao dịch đặt vé thất bại!");
+  }
+  return data;
+}
+
+export async function deleteTicketAPI(ticketId: string) {
+  const res = await fetch(`${BASE_URL}/tickets/${ticketId}`, {
+    method: "DELETE"
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Xóa vé thất bại!");
   }
   return data;
 }
@@ -107,4 +119,50 @@ export async function checkInTicketAPI(id: string) {
     throw new Error(data.message || "Không thể thực hiện check-in vé trên SQL Server");
   }
   return data;
+}
+
+export async function getSeatLocksAPI() {
+  const res = await fetch(`${BASE_URL}/tickets/locks`);
+  if (!res.ok) {
+    throw new Error("Không thể tải danh sách khóa ghế");
+  }
+  return res.json();
+}
+
+export async function addSeatLockAPI(showtimeId: number, seatId: string, transactionId: string, status: 'pending' | 'sold', durationMs: number) {
+  const res = await fetch(`${BASE_URL}/tickets/locks`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ showtimeId, seatId, transactionId, status, durationMs })
+  });
+  if (!res.ok) {
+    throw new Error("Không thể thêm khóa ghế");
+  }
+  return res.json();
+}
+
+export async function removeSeatLockAPI(showtimeId: number, seatId: string) {
+  const res = await fetch(`${BASE_URL}/tickets/locks/remove`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ showtimeId, seatId })
+  });
+  if (!res.ok) {
+    throw new Error("Không thể xóa khóa ghế");
+  }
+  return res.json();
+}
+
+export async function clearSeatLocksForTransactionAPI(transactionId: string) {
+  const res = await fetch(`${BASE_URL}/tickets/locks/tx/${transactionId}`, {
+    method: "DELETE"
+  });
+  if (!res.ok) {
+    throw new Error("Không thể xóa các khóa ghế của giao dịch");
+  }
+  return res.json();
 }
