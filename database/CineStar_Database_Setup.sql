@@ -576,7 +576,7 @@ BEGIN
 END;
 GO
 
--- [SỬA LỖI] SP Đặt vé chống Lost Update bằng cơ chế Validation (Optimistic Concurrency Control)
+-- [SỬA LỖI] SP Đặt vé chống Lost Update bằng cơ chế Khóa bi quan (Pessimistic Locking - UPDLOCK, HOLDLOCK)
 CREATE PROCEDURE usp_BookTicket_LostUpdate_Fixed
     @TicketId VARCHAR(50), @CustomerId INT, @ShowtimeId INT, @SeatNumbers VARCHAR(MAX), @UserEmail VARCHAR(100), @TotalPrice DECIMAL(18,2), @PaymentMethod NVARCHAR(50), @LatencyMs INT = 0
 AS
@@ -605,7 +605,14 @@ BEGIN
         SELECT value, s.SeatId FROM STRING_SPLIT(@SeatNumbers, ',')
         INNER JOIN Seat s ON s.SeatNumber = value AND s.RoomId = @RoomId;
 
-        -- 1. READ PHASE: KIỂM TRA TRẠNG THÁI GHẾ LẦN 1
+        -- 1. READ & LOCK PHASE: ĐỌC VÀ KHÓA GHẾ BẰNG UPDLOCK, HOLDLOCK
+        -- Khóa các dòng tương ứng trong bảng Seat để chặn các giao dịch đặt trùng ghế đồng thời
+        DECLARE @LockSeatId INT;
+        SELECT @LockSeatId = SeatId 
+        FROM Seat WITH (UPDLOCK, HOLDLOCK)
+        WHERE SeatId IN (SELECT SeatId FROM @SeatsTable);
+
+        -- Kiểm tra xem ghế đã được đặt và thanh toán bởi giao dịch khác chưa
         IF EXISTS (
             SELECT 1 FROM TicketDetail td
             JOIN Ticket t ON td.TicketId = t.TicketId
@@ -623,17 +630,7 @@ BEGIN
             WAITFOR DELAY @DelayStr;
         END
 
-        -- 2. VALIDATION PHASE: KIỂM TRA LẠI TRẠNG THÁI GHẾ LẦN 2 TRƯỚC KHI COMMIT (XÁC THỰC OCC)
-        IF EXISTS (
-            SELECT 1 FROM TicketDetail td
-            JOIN Ticket t ON td.TicketId = t.TicketId
-            WHERE td.ShowtimeId = @ShowtimeId AND td.SeatId IN (SELECT SeatId FROM @SeatsTable) AND t.Status != N'canceled'
-        )
-        BEGIN
-            THROW 50003, N'Xung đột tương tranh (Validation thất bại): Ghế đã được đặt bởi giao dịch khác trong thời gian chờ!', 1;
-        END
-
-        -- 3. WRITE PHASE: GHI DỮ LIỆU
+        -- 2. WRITE PHASE: GHI DỮ LIỆU (Đã có khóa bảo vệ nên không cần bước Validation)
         INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status)
         VALUES (@TicketId, @CustomerId, GETDATE(), @TotalPrice, @PaymentMethod, @UserEmail, N'valid');
 
