@@ -390,81 +390,24 @@ export class TicketService {
         }
       }
 
-      // Simulate Latency (transaction stays open, but locks are NOT held under OCC)
-      if (latencyMs > 0) {
-        await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(() => {
-            clearInterval(interval);
-            resolve();
-          }, latencyMs);
-
-          const interval = setInterval(() => {
-            if (clientAborted && clientAborted()) {
-              clearTimeout(timer);
-              clearInterval(interval);
-              reject(new Error("Client aborted transaction"));
-            }
-          }, 200);
-        });
-      }
-
-      // 2. VALIDATION PHASE: Validate before writing to CSDL (Only when fix is active)
-      if (useLockFix) {
-        for (const seat of seats) {
-          const validationCheck = await transaction.request()
-            .input("showtimeId", sql.Int, showtimeId)
-            .input("seatNumber", sql.VarChar, seat)
-            .query(`
-              SELECT Status FROM v_ShowtimeSeats 
-              WHERE SeatNumber = @seatNumber AND ShowtimeId = @showtimeId
-            `);
-
-          const currentStatus = validationCheck.recordset[0]?.Status;
-          if (currentStatus === "sold" || currentStatus === "SOLD") {
-            throw new Error(`Xung đột tương tranh (Validation thất bại): Ghế ${seat} đã được đặt bởi khách hàng khác trong thời gian chờ.`);
-          }
-        }
-      }
-
-      // 3. WRITE PHASE: Write ticket records to database
       const ticketId = "CNS" + Math.random().toString(36).substring(2, 7).toUpperCase();
-      // Default to customer ID 1 or a lookup
-      await transaction.request()
-        .input("ticketId", sql.VarChar, ticketId)
-        .input("customerId", sql.Int, 1) // default customer ID
-        .input("totalPrice", sql.Decimal(18,2), totalPrice)
-        .input("paymentMethod", sql.NVarChar, paymentMethod)
-        .input("userEmail", sql.VarChar, userEmail)
-        .query(`
-          INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status)
-          VALUES (@ticketId, @customerId, GETDATE(), @totalPrice, @paymentMethod, @userEmail, N'valid')
-        `);
 
-      // Insert seat tickets into TicketDetail (with Lost Update overwrite simulation if useLockFix is false)
-      const pricePerSeat = totalPrice / seats.length;
-      for (const seat of seats) {
-        const checkConflict = await transaction.request()
-          .input("showtimeId", sql.Int, showtimeId)
-          .input("seatNumber", sql.VarChar, seat)
+      // If useLockFix is true (Pessimistic Locking / fixed mode), we write BEFORE the latency sleep
+      // to hold the Exclusive lock on the TicketDetail row and block concurrent bookings.
+      if (useLockFix) {
+        await transaction.request()
+          .input("ticketId", sql.VarChar, ticketId)
+          .input("customerId", sql.Int, 1) // default customer ID
+          .input("totalPrice", sql.Decimal(18,2), totalPrice)
+          .input("paymentMethod", sql.NVarChar, paymentMethod)
+          .input("userEmail", sql.VarChar, userEmail)
           .query(`
-            SELECT TicketDetailId FROM TicketDetail 
-            WHERE ShowtimeId = @showtimeId 
-              AND SeatId = (SELECT SeatId FROM Seat WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId))
+            INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status)
+            VALUES (@ticketId, @customerId, GETDATE(), @totalPrice, @paymentMethod, @userEmail, N'valid')
           `);
 
-        if (!useLockFix && checkConflict.recordset.length > 0) {
-          // Lost Update: Overwrite the previous buyer's ticket detail to point to our ticket!
-          const existingDetailId = checkConflict.recordset[0].TicketDetailId;
-          await transaction.request()
-            .input("detailId", sql.Int, existingDetailId)
-            .input("ticketId", sql.VarChar, ticketId)
-            .query(`
-              UPDATE TicketDetail 
-              SET TicketId = @ticketId 
-              WHERE TicketDetailId = @detailId
-            `);
-        } else {
-          // Normal booking insert
+        const pricePerSeat = totalPrice / seats.length;
+        for (const seat of seats) {
           await transaction.request()
             .input("ticketId", sql.VarChar, ticketId)
             .input("showtimeId", sql.Int, showtimeId)
@@ -482,13 +425,85 @@ export class TicketService {
         }
       }
 
+      // Simulate Latency (transaction stays open)
+      if (latencyMs > 0) {
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            clearInterval(interval);
+            resolve();
+          }, latencyMs);
+
+          const interval = setInterval(() => {
+            if (clientAborted && clientAborted()) {
+              clearTimeout(timer);
+              clearInterval(interval);
+              reject(new Error("Client aborted transaction"));
+            }
+          }, 200);
+        });
+      }
+
+      // If useLockFix is false (Buggy Mode), we write AFTER the latency sleep to simulate Lost Update overwrite.
+      if (!useLockFix) {
+        await transaction.request()
+          .input("ticketId", sql.VarChar, ticketId)
+          .input("customerId", sql.Int, 1) // default customer ID
+          .input("totalPrice", sql.Decimal(18,2), totalPrice)
+          .input("paymentMethod", sql.NVarChar, paymentMethod)
+          .input("userEmail", sql.VarChar, userEmail)
+          .query(`
+            INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status)
+            VALUES (@ticketId, @customerId, GETDATE(), @totalPrice, @paymentMethod, @userEmail, N'valid')
+          `);
+
+        const pricePerSeat = totalPrice / seats.length;
+        for (const seat of seats) {
+          const checkConflict = await transaction.request()
+            .input("showtimeId", sql.Int, showtimeId)
+            .input("seatNumber", sql.VarChar, seat)
+            .query(`
+              SELECT TicketDetailId FROM TicketDetail 
+              WHERE ShowtimeId = @showtimeId 
+                AND SeatId = (SELECT SeatId FROM Seat WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId))
+            `);
+
+          if (checkConflict.recordset.length > 0) {
+            // Lost Update: Overwrite the previous buyer's ticket detail to point to our ticket!
+            const existingDetailId = checkConflict.recordset[0].TicketDetailId;
+            await transaction.request()
+              .input("detailId", sql.Int, existingDetailId)
+              .input("ticketId", sql.VarChar, ticketId)
+              .query(`
+                UPDATE TicketDetail 
+                SET TicketId = @ticketId 
+                WHERE TicketDetailId = @detailId
+              `);
+          } else {
+            // Normal booking insert
+            await transaction.request()
+              .input("ticketId", sql.VarChar, ticketId)
+              .input("showtimeId", sql.Int, showtimeId)
+              .input("seatNumber", sql.VarChar, seat)
+              .input("price", sql.Decimal(18,2), pricePerSeat)
+              .query(`
+                INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)
+                VALUES (
+                  @ticketId, 
+                  @showtimeId, 
+                  (SELECT SeatId FROM Seat WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId)), 
+                  @price
+                )
+              `);
+          }
+        }
+      }
+
       // Update showtime seats counter
       await transaction.request()
         .input("showtimeId", sql.Int, showtimeId)
-        .input("seatCount", sql.Int, seats.length)
         .query(`
           UPDATE Showtime 
-          SET Price = Price -- No AvailableSeats column in Showtime table, so this is a placeholder or safe operation
+          SET Price = Price 
           WHERE ShowtimeID = @showtimeId
         `);
 
