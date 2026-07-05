@@ -541,16 +541,27 @@ export class TicketService {
 
   async deleteTicket(ticketId: string): Promise<boolean> {
     if (getMockMode()) {
-      mockTickets = mockTickets.map(t => t.id === ticketId ? { ...t, status: "canceled" } : t);
+      if (ticketId === "all") {
+        mockTickets = mockTickets.filter(t => t.id === 'CNS_REVENUE_DEL');
+      } else {
+        mockTickets = mockTickets.map(t => t.id === ticketId ? { ...t, status: "canceled" } : t);
+      }
       return true;
     }
 
     const pool = await connectDatabase();
     if (!pool) return false;
 
-    await pool.request()
-      .input("TicketId", sql.VarChar, ticketId)
-      .execute("usp_CancelTicket");
+    if (ticketId === "all") {
+      await pool.request().query(`
+        DELETE FROM TicketDetail WHERE TicketId != 'CNS_REVENUE_DEL';
+        DELETE FROM Ticket WHERE TicketId != 'CNS_REVENUE_DEL';
+      `);
+    } else {
+      await pool.request()
+        .input("TicketId", sql.VarChar, ticketId)
+        .execute("usp_CancelTicket");
+    }
 
     return true;
   }

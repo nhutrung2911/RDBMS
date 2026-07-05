@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { AlertTriangle, Play, RotateCcw, X, Cpu, Info, ShieldAlert } from "lucide-react";
+import { clearAllTicketsAPI } from "../lib/api";
 
 export interface ConcurrencyConfig {
   devModeEnabled: boolean;
@@ -289,7 +290,12 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
 
                 {/* Reset local storage cache button */}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    try {
+                      await clearAllTicketsAPI();
+                    } catch (e) {
+                      console.error("Failed to clear backend tickets:", e);
+                    }
                     localStorage.clear();
                     window.location.reload();
                   }}

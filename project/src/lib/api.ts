@@ -224,3 +224,10 @@ export async function runPhantomQueryAPI(params: {
   }
   return data;
 }
+
+export async function clearAllTicketsAPI() {
+  const res = await fetch(`${BASE_URL}/tickets/all`, {
+    method: "DELETE"
+  });
+  return res.json();
+}
