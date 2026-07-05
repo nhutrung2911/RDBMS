@@ -46,9 +46,9 @@ const SCENARIO_DESCRIPTIONS: Record<string, { desc: string; trigger: string; fix
     fixDesc: "N/A"
   },
   lost_update: {
-    desc: "Hai luồng cùng đọc ghế trống cùng lúc. Luồng A đặt trước nhưng luồng B không biết, luồng B tiếp tục đặt đè lên. Database giải quyết bằng cách dùng khóa độc quyền UPDLOCK hoặc HOLDLOCK khi đọc trạng thái ghế.",
+    desc: "Hai luồng cùng đọc ghế trống cùng lúc. Luồng A đặt trước nhưng luồng B không biết, luồng B tiếp tục đặt đè lên. Database giải quyết bằng cách áp dụng cơ chế OCC (Optimistic Concurrency Control) - Xác thực lại trạng thái dữ liệu trước khi ghi.",
     trigger: "Vào trang Đặt vé (SeatsPage hoặc Quầy bán vé), chọn ghế và bấm 'Tiếp theo/In vé'. Hệ thống sẽ tự động tạo luồng phụ đặt trùng ghế đó cùng lúc để tạo xung đột.",
-    fixDesc: "Khi bật 'Sửa lỗi': Stored Procedure sẽ dùng khóa UPDLOCK, HOLDLOCK. Luồng phụ sẽ bị block (chờ khóa) cho đến khi giao dịch hiện tại hoàn tất, sau đó luồng phụ thất bại vì ghế đã có chủ."
+    fixDesc: "Khi bật 'Sửa lỗi': Hệ thống áp dụng kiểm soát tương tranh lạc quan (OCC - Validation). Giao dịch B commit trước sẽ thành công. Giao dịch A commit sau kiểm tra thấy ghế đã bị đổi trạng thái sẽ tự động Rollback thất bại để tránh mất mát dữ liệu."
   },
   dirty_read: {
     desc: "Giao dịch A đang thực hiện giữ ghế thanh toán (chưa commit). Giao dịch B đọc sơ đồ ghế và thấy ghế đã bị khóa (Đọc dữ liệu chưa commit). Sau đó Giao dịch A hủy thanh toán (rollback).",
@@ -265,11 +265,11 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                               {config.useLockFix ? "Đã áp dụng cách khắc phục" : "Chưa khắc phục lỗi (Sử dụng SP cũ)"}
                             </h4>
                             <p className="text-[10px] text-gray-500 mt-0.5">
-                              {config.scenario === "lost_update" ? "Dùng SP có UPDLOCK, HOLDLOCK" : 
-                               config.scenario === "deadlock" ? "Sắp xếp tăng dần ID ghế trước khi khóa" : 
-                               config.scenario === "non_repeatable_read" ? "Giao thức Nhãn thời gian cơ bản (TO)" : 
-                               config.scenario === "phantom" ? "Giao thức Khóa 2 giai đoạn (2PL / Serializable)" : 
-                               "Kích hoạt UPDLOCK, HOLDLOCK và Sắp xếp tự động"}
+                               {config.scenario === "lost_update" ? "Kiểm soát tương tranh lạc quan (OCC - Validation)" : 
+                                config.scenario === "deadlock" ? "Sắp xếp tăng dần ID ghế trước khi khóa" : 
+                                config.scenario === "non_repeatable_read" ? "Giao thức Nhãn thời gian cơ bản (TO)" : 
+                                config.scenario === "phantom" ? "Giao thức Khóa 2 giai đoạn (2PL / Serializable)" : 
+                                "Kích hoạt cách khắc phục kịch bản"}
                             </p>
                           </div>
                         </div>
