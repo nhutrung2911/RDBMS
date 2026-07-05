@@ -401,9 +401,9 @@ export default function AdminPortalPage({
       try {
         const online = await checkBackendOnline();
         if (online) {
-          // Only auto-sync if we are NOT in the middle of a non-repeatable read transaction simulation
-          // to avoid interfering with the simulated 10-second latency/rollback sequence
-          if (!nonRepResults.isActive) {
+          // Only auto-sync if we are NOT in the middle of a non-repeatable read or phantom read simulation
+          // to avoid interfering with the simulated latency/rollback sequence
+          if (!nonRepResults.isActive && !phantomActive) {
             await syncWithBackend();
             refreshDB();
             
@@ -432,7 +432,7 @@ export default function AdminPortalPage({
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [reportStartDate, reportEndDate, reportType, hasSearchedReport, nonRepResults.isActive]);
+  }, [reportStartDate, reportEndDate, reportType, hasSearchedReport, nonRepResults.isActive, phantomActive]);
 
   const refreshDB = () => {
     setMoviesList(loadMovies());
