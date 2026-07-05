@@ -97,6 +97,32 @@ export async function getShowtimesAPI() {
   return res.json();
 }
 
+export async function createShowtimeAPI(showtime: any) {
+  const res = await fetch(`${BASE_URL}/tickets/showtimes`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(showtime)
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Không thể tạo suất chiếu mới trên cơ sở dữ liệu!");
+  }
+  return data;
+}
+
+export async function deleteShowtimeAPI(id: number) {
+  const res = await fetch(`${BASE_URL}/tickets/showtimes/${id}`, {
+    method: "DELETE"
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Không thể xóa suất chiếu trên cơ sở dữ liệu!");
+  }
+  return data;
+}
+
 export async function getTicketsAPI() {
   const res = await fetch(`${BASE_URL}/tickets`);
   if (!res.ok) {
@@ -165,4 +191,36 @@ export async function clearSeatLocksForTransactionAPI(transactionId: string) {
     throw new Error("Không thể xóa các khóa ghế của giao dịch");
   }
   return res.json();
+}
+
+export async function resetDemoTicketAPI() {
+  const res = await fetch(`${BASE_URL}/tickets/reset-demo`, {
+    method: "POST"
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Khôi phục dữ liệu mẫu thất bại!");
+  }
+  return data;
+}
+
+export async function runPhantomQueryAPI(params: {
+  movieId: number;
+  cinemaId: number;
+  date: string;
+  latencyMs: number;
+  useLockFix: boolean;
+}) {
+  const res = await fetch(`${BASE_URL}/tickets/showtimes/phantom-query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(params)
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Lỗi khi chạy truy vấn tương tranh Phantom!");
+  }
+  return data;
 }

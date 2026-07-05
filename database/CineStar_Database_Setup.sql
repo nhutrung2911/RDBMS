@@ -508,7 +508,7 @@ GO
 -- ----------------------------------------------------------------------------------
 
 -- ==================================================================================
--- 4.7.1. MẤT DỮ LIỆU CẬP NHẬT (Lost Update) & 4.8.1. SỬA LỖI (UPDLOCK, HOLDLOCK)
+-- 4.7.1. MẤT DỮ LIỆU CẬP NHẬT (Lost Update) & 4.8.1. SỬA LỖI (OCC / VALIDATION)
 -- ==================================================================================
 
 -- [LỖI] SP Đặt vé gây Lost Update (Không dùng khóa giữ dòng)
@@ -576,7 +576,7 @@ BEGIN
 END;
 GO
 
--- [SỬA LỖI] SP Đặt vé chống Lost Update bằng khóa giữ dòng (UPDLOCK, HOLDLOCK)
+-- [SỬA LỖI] SP Đặt vé chống Lost Update bằng cơ chế Validation (Optimistic Concurrency Control)
 CREATE PROCEDURE usp_BookTicket_LostUpdate_Fixed
     @TicketId VARCHAR(50), @CustomerId INT, @ShowtimeId INT, @SeatNumbers VARCHAR(MAX), @UserEmail VARCHAR(100), @TotalPrice DECIMAL(18,2), @PaymentMethod NVARCHAR(50), @LatencyMs INT = 0
 AS
@@ -605,11 +605,7 @@ BEGIN
         SELECT value, s.SeatId FROM STRING_SPLIT(@SeatNumbers, ',')
         INNER JOIN Seat s ON s.SeatNumber = value AND s.RoomId = @RoomId;
 
-        -- SỬ DỤNG UPDLOCK VÀ HOLDLOCK TRÊN BẢNG SEAT ĐỂ GIỮ KHÓA ĐỌC ĐẾN KHI COMMIT (TRÁNH BYPASS)
-        DECLARE @LockDummy INT;
-        SELECT @LockDummy = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId IN (SELECT SeatId FROM @SeatsTable);
-
-        -- KIỂM TRA TRẠNG THÁI GHẾ
+        -- 1. READ PHASE: KIỂM TRA TRẠNG THÁI GHẾ LẦN 1
         IF EXISTS (
             SELECT 1 FROM TicketDetail td
             JOIN Ticket t ON td.TicketId = t.TicketId
@@ -619,6 +615,7 @@ BEGIN
             THROW 50003, N'Ghế đã có người đặt thành công trước đó!', 1;
         END
 
+        -- Giả lập độ trễ giao dịch
         IF @LatencyMs > 0
         BEGIN
             DECLARE @DelayStr CHAR(12);
@@ -626,6 +623,17 @@ BEGIN
             WAITFOR DELAY @DelayStr;
         END
 
+        -- 2. VALIDATION PHASE: KIỂM TRA LẠI TRẠNG THÁI GHẾ LẦN 2 TRƯỚC KHI COMMIT (XÁC THỰC OCC)
+        IF EXISTS (
+            SELECT 1 FROM TicketDetail td
+            JOIN Ticket t ON td.TicketId = t.TicketId
+            WHERE td.ShowtimeId = @ShowtimeId AND td.SeatId IN (SELECT SeatId FROM @SeatsTable) AND t.Status != N'canceled'
+        )
+        BEGIN
+            THROW 50003, N'Xung đột tương tranh (Validation thất bại): Ghế đã được đặt bởi giao dịch khác trong thời gian chờ!', 1;
+        END
+
+        -- 3. WRITE PHASE: GHI DỮ LIỆU
         INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status)
         VALUES (@TicketId, @CustomerId, GETDATE(), @TotalPrice, @PaymentMethod, @UserEmail, N'valid');
 
@@ -753,27 +761,45 @@ BEGIN
 END;
 GO
 
--- [SỬA LỖI] Chống Đọc không lặp lại bằng REPEATABLE READ (Khóa các dòng đã đọc)
+-- [SỬA LỖI] Chống Đọc không lặp lại bằng Giao thức nhãn thời gian cơ bản (Basic TO)
 CREATE PROCEDURE usp_GetRevenue_NonRepeatableRead_Fixed
     @StartDate DATETIME, @EndDate DATETIME, @LatencyMs INT = 0
 AS
 BEGIN
-    SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED; -- Chạy dưới READ COMMITTED để cho phép ghi xen vào
     BEGIN TRANSACTION;
-    
-    -- Lần đọc 1 (Khóa tất cả các dòng đã đọc, giao tác khác không thể UPDATE/DELETE đến khi commit)
-    SELECT SUM(TotalPrice) AS FirstRead FROM Ticket WHERE BookingTime BETWEEN @StartDate AND @EndDate AND Status != N'canceled';
+    BEGIN TRY
+        -- Lần đọc 1 (Đọc dữ liệu và ghi nhận làm nhãn đọc)
+        DECLARE @FirstRead DECIMAL(18,2);
+        SELECT @FirstRead = SUM(TotalPrice) FROM Ticket WHERE BookingTime BETWEEN @StartDate AND @EndDate AND Status != N'canceled';
+        
+        SELECT @FirstRead AS FirstRead;
 
-    IF @LatencyMs > 0
-    BEGIN
-        DECLARE @DelayStr CHAR(12);
-        SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
-        WAITFOR DELAY @DelayStr;
-    END
+        IF @LatencyMs > 0
+        BEGIN
+            DECLARE @DelayStr CHAR(12);
+            SET @DelayStr = '00:00:' + RIGHT('00' + CAST(@LatencyMs/1000 AS VARCHAR(2)), 2) + '.' + RIGHT('000' + CAST(@LatencyMs%1000 AS VARCHAR(3)), 3);
+            WAITFOR DELAY @DelayStr;
+        END
 
-    SELECT SUM(TotalPrice) AS SecondRead FROM Ticket WHERE BookingTime BETWEEN @StartDate AND @EndDate AND Status != N'canceled';
-    
-    COMMIT TRANSACTION;
+        -- Lần đọc 2
+        DECLARE @SecondRead DECIMAL(18,2);
+        SELECT @SecondRead = SUM(TotalPrice) FROM Ticket WHERE BookingTime BETWEEN @StartDate AND @EndDate AND Status != N'canceled';
+
+        -- PHA XÁC THỰC NHÃN THỜI GIAN:
+        -- Nếu dữ liệu bị thay đổi bởi giao dịch trẻ hơn, giao dịch cũ (Older) bị từ chối đọc và ROLLBACK
+        IF ISNULL(@FirstRead, 0) != ISNULL(@SecondRead, 0)
+        BEGIN
+            THROW 50005, N'LỖI XUNG ĐỘT NHÃN THỜI GIAN (Timestamp Ordering): Dữ liệu đã bị sửa đổi bởi giao dịch trẻ hơn. Giao tác bị ROLLBACK.', 1;
+        END
+
+        SELECT @SecondRead AS SecondRead;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
 END;
 GO
 
@@ -807,12 +833,12 @@ BEGIN
 END;
 GO
 
--- [SỬA LỖI] Chống lỗi bóng ma bằng SERIALIZABLE (Khóa phạm vi chèn dữ liệu Range Lock)
+-- [SỬA LỖI] Chống lỗi bóng ma bằng Giao thức Khóa 2 giai đoạn nghiêm ngặt (Strict 2PL)
 CREATE PROCEDURE usp_GetShowtimes_Phantom_Fixed
     @MovieId INT, @LatencyMs INT = 0
 AS
 BEGIN
-    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; -- Khóa toàn bộ dãy dữ liệu ngăn chặn INSERT xen vào
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; -- Kích hoạt Strict 2PL để ngăn chặn dữ liệu xen vào
     BEGIN TRANSACTION;
     
     SELECT COUNT(*) AS ShowtimesCount1 FROM Showtime WHERE MovieId = @MovieId;
@@ -863,13 +889,15 @@ BEGIN
         IF @SeatId2 IS NULL
             THROW 50002, N'Ghế thứ hai không tồn tại.', 1;
 
-        -- Bước 1: Khóa ghế thứ nhất trong Seat
-        DECLARE @Dummy1 INT;
-        SELECT @Dummy1 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId1;
-        IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId1)
-            THROW 50003, N'Ghế thứ nhất đã được đặt trước đó.', 1;
+        -- Tạo hóa đơn Ticket trước làm khóa ngoại cho TicketDetail
+        INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, Status)
+        VALUES (@TicketId, @CustomerId, GETDATE(), @TotalPrice, N'Momo', N'valid');
 
-        -- Giả lập độ trễ giữa 2 bước khóa
+        -- Bước 1: Chèn ghế thứ nhất (Sẽ giữ khóa độc quyền X trên row mới chèn của TicketDetail)
+        INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)
+        VALUES (@TicketId, @ShowtimeId, @SeatId1, @TotalPrice/2);
+
+        -- Giả lập độ trễ giữa 2 bước chèn để tạo điều kiện khóa chéo
         IF @LatencyMs > 0
         BEGIN
             DECLARE @DelayStr CHAR(12);
@@ -877,19 +905,9 @@ BEGIN
             WAITFOR DELAY @DelayStr;
         END
 
-        -- Bước 2: Khóa ghế thứ hai trong Seat
-        DECLARE @Dummy2 INT;
-        SELECT @Dummy2 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId2;
-        IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId2)
-            THROW 50003, N'Ghế thứ hai đã được đặt trước đó.', 1;
-
-        -- Thực hiện đặt vé
-        INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, Status)
-        VALUES (@TicketId, @CustomerId, GETDATE(), @TotalPrice, N'Momo', N'valid');
-
-        INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price) VALUES
-        (@TicketId, @ShowtimeId, @SeatId1, @TotalPrice/2),
-        (@TicketId, @ShowtimeId, @SeatId2, @TotalPrice/2);
+        -- Bước 2: Chèn ghế thứ hai
+        INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)
+        VALUES (@TicketId, @ShowtimeId, @SeatId2, @TotalPrice/2);
 
         COMMIT TRANSACTION;
     END TRY
@@ -901,12 +919,22 @@ END;
 GO
 
 -- [SỬA LỖI] Đặt combo ghế phòng chống Deadlock (Sắp xếp thống nhất thứ tự khóa - Luôn khóa ghế có ID nhỏ trước)
+-- [SỬA LỖI] Đặt combo ghế phòng chống Deadlock bằng giao thức Wait-Die (Độ ưu tiên giao dịch)
 CREATE PROCEDURE usp_BookComboSeats_Deadlock_Fixed
-    @TicketId VARCHAR(50), @CustomerId INT, @ShowtimeId INT, @Seat1 VARCHAR(10), @Seat2 VARCHAR(10), @TotalPrice DECIMAL(18,2), @LatencyMs INT = 0
+    @TicketId VARCHAR(50), @CustomerId INT, @ShowtimeId INT, @Seat1 VARCHAR(10), @Seat2 VARCHAR(10), @TotalPrice DECIMAL(18,2), @LatencyMs INT = 0, @DeadlockPriority NVARCHAR(20) = N'NORMAL'
 AS
 BEGIN
     SET NOCOUNT ON;
     SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+    
+    -- Áp dụng độ ưu tiên tương tranh (Wait-Die)
+    IF @DeadlockPriority = N'HIGH'
+        SET DEADLOCK_PRIORITY HIGH;
+    ELSE IF @DeadlockPriority = N'LOW'
+        SET DEADLOCK_PRIORITY LOW;
+    ELSE
+        SET DEADLOCK_PRIORITY NORMAL;
+
     BEGIN TRANSACTION;
     BEGIN TRY
         -- Kiểm tra TicketId đã tồn tại chưa
@@ -928,20 +956,13 @@ BEGIN
         IF @SeatId2 IS NULL
             THROW 50002, N'Ghế thứ hai không tồn tại.', 1;
 
-        -- SẮP XẾP: Ghế có ID nhỏ hơn luôn được khóa trước tiên để ngăn chặn hiện tượng khóa chéo (Deadlock)
-        DECLARE @Temp INT;
-        IF @SeatId1 > @SeatId2
-        BEGIN
-            SET @Temp = @SeatId1;
-            SET @SeatId1 = @SeatId2;
-            SET @SeatId2 = @Temp;
-        END
+        -- Tạo hóa đơn Ticket trước làm khóa ngoại cho TicketDetail
+        INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, Status)
+        VALUES (@TicketId, @CustomerId, GETDATE(), @TotalPrice, N'Momo', N'valid');
 
-        -- Bước 1: Khóa ghế có ID nhỏ hơn trước trong Seat
-        DECLARE @Dummy1 INT;
-        SELECT @Dummy1 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId1;
-        IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId1)
-            THROW 50003, N'Ghế thứ nhất đã được đặt trước đó.', 1;
+        -- Bước 1: Chèn ghế thứ nhất (Sẽ giữ khóa độc quyền X trên row mới chèn của TicketDetail)
+        INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)
+        VALUES (@TicketId, @ShowtimeId, @SeatId1, @TotalPrice/2);
 
         IF @LatencyMs > 0
         BEGIN
@@ -950,19 +971,9 @@ BEGIN
             WAITFOR DELAY @DelayStr;
         END
 
-        -- Bước 2: Khóa ghế có ID lớn hơn sau trong Seat
-        DECLARE @Dummy2 INT;
-        SELECT @Dummy2 = SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatId = @SeatId2;
-        IF EXISTS (SELECT 1 FROM TicketDetail WHERE ShowtimeId = @ShowtimeId AND SeatId = @SeatId2)
-            THROW 50003, N'Ghế thứ hai đã được đặt trước đó.', 1;
-
-        -- Thực hiện đặt vé
-        INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, Status)
-        VALUES (@TicketId, @CustomerId, GETDATE(), @TotalPrice, N'Momo', N'valid');
-
-        INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price) VALUES
-        (@TicketId, @ShowtimeId, @SeatId1, @TotalPrice/2),
-        (@TicketId, @ShowtimeId, @SeatId2, @TotalPrice/2);
+        -- Bước 2: Chèn ghế thứ hai
+        INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price)
+        VALUES (@TicketId, @ShowtimeId, @SeatId2, @TotalPrice/2);
 
         COMMIT TRANSACTION;
     END TRY

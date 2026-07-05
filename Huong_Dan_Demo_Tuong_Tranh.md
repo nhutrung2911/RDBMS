@@ -163,56 +163,75 @@ Thủ quỹ A truy vấn tổng doanh thu lần 1. Trong lúc giao dịch A chư
 
 ### 🖥️ Các bước thực hiện Demo
 
-#### Bước 1: Gây lỗi trực tiếp trên giao diện
-1. Trên **Màn hình A (Trái)**, vào **Admin Portal** -> **Báo cáo Doanh thu**.
-2. Nhấn nút **"Xem báo cáo (Tương tranh)"** (Giao dịch sử dụng mặc định READ COMMITTED).
-3. **Hành động tương tranh**:
-   * Giao dịch A đọc doanh thu lần 1 (ví dụ: hiển thị 10,000,000đ) và treo chờ 10 giây.
-   * CSDL tự động kích hoạt một tiến trình nền thực hiện xóa vé mẫu `CNS_REVENUE_DEL` trị giá `1,200,000đ` (đại diện Khách B hủy vé thành công).
-   * Giao dịch A thực hiện truy vấn lần 2.
-4. **Hiện tượng**: Tổng doanh thu lần 2 bị **giảm đi 1,200,000đ** so với lần 1. Hệ thống hiển thị cảnh báo lỗi tương tranh không nhất quán trên Console log của trang Admin.
+#### Bước 1: Gây lỗi trực tiếp trên giao diện (2 Màn hình song song)
+1. **Màn hình A (Trái - Vai trò Thủ quỹ A)**: Vào **Admin Portal** -> **Bảng Điều Khiển** (Bộ lọc Doanh thu).
+2. **Màn hình B (Phải - Vai trò Nhân viên B)**: Vào **Admin Portal** -> **Soát Vé & Giao Dịch**. Nhập mã vé `CNS_REVENUE_DEL` để tìm kiếm (Hệ thống hiện thông tin vé trị giá **1.200.000đ** của ghế A1 và nút đỏ **"Hủy Vé"**).
+3. **Thực hiện thao tác tương tranh**:
+   * Nhấn nút đỏ **"Xem Báo Cáo"** ở **Màn hình A (Trái)**. Giao dịch T1 bắt đầu đọc doanh thu lần 1 (bao gồm cả vé mẫu 1.200.000đ) và quay Loading chờ 10 giây.
+   * *Ngay lập tức* (trong vòng 5 giây đầu tiên khi bên trái đang Loading), tại **Màn hình B (Phải)**, nhấp nút **"Hủy Vé"** và xác nhận **OK**. Giao dịch T2 hoàn tất hủy vé và **COMMIT** thành công.
+   * Hết 10 giây chờ, giao dịch T1 tại **Màn hình A (Trái)** thức dậy và thực hiện đọc doanh thu lần 2.
+4. **Hiện tượng lỗi**:
+   * Tổng doanh thu hiển thị trên bảng lần 2 bị **giảm đi 1.200.000đ** (rơi về 0đ) so với lần 1.
+   * Trên Tab **Nhật ký SQL** của màn hình A, bạn sẽ thấy thông báo lỗi màu đỏ đậm: `[LỖI] NON-REPEATABLE READ XẢY RA: Doanh thu thay đổi giữa hai lần đọc trong cùng một Transaction!`
 
 ---
 
-### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
-1. Trên **Dev Panel của màn hình Admin**, chuyển Isolation Level sang **REPEATABLE READ**.
-2. Bấm nút **"Xem báo cáo (Tương tranh)"** lần nữa.
+### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel trên 2 Màn hình)
+1. Trên **Màn hình A (Trái)**:
+   * Mở **Dev Panel** -> Chọn tình huống **3. Non-repeatable Read (Đọc không lại)**.
+   * Bật nút: **"Đã áp dụng cách khắc phục"** (Nút chuyển sang màu xanh lục - kích hoạt Giao thức nhãn thời gian cơ bản - Basic TO).
+2. Lặp lại quy trình thao tác trên 2 màn hình:
+   * Nhấn nút **"Xem Báo Cáo"** ở **Màn hình A (Trái)** (Hệ thống tự động khôi phục trạng thái vé mẫu về `valid` trước khi đọc lần 1). Giao dịch bắt đầu quay Loading chờ 10 giây.
+   * Trong lúc chờ, tại **Màn hình B (Phải)**, nhấp nút **"Hủy Vé"** và xác nhận **OK**.
 3. **Hiện tượng sau khi sửa**:
-   * Lần đọc 1 hiển thị số tiền.
-   * Tiến trình hủy vé mẫu của B cố gắng chạy nhưng bị CSDL **Block** do khóa đọc (Shared Lock) của REPEATABLE READ đang giữ chặt dòng doanh thu.
-   * Lần đọc 2 cho ra kết quả **trùng khớp hoàn toàn** với lần 1.
-   * Sau khi giao dịch A kết thúc, tiến trình B mới được phép hoàn tất.
+   * Khi giao dịch A thực hiện đọc lại lần 2: Hệ thống phát hiện dữ liệu đã bị sửa đổi bởi giao dịch B trẻ hơn ($TS(A) < W\_TS(Q)$).
+   * Hệ thống lập tức **từ chối đọc, ném lỗi xung đột nhãn thời gian và tự động ROLLBACK** để bảo toàn tính nhất quán.
+   * Một cửa sổ Alert thông báo lỗi xung đột nhãn thời gian hiện lên trên màn hình A. Tab **Nhật ký SQL** in ra log rollback: `CLIENT A: ROLLBACK TRANSACTION A; (Giao tác T1 bị hủy bỏ theo giao thức TO)`. Giao dịch kết thúc an toàn thay vì đọc ra số liệu bị lệch.
 
 ---
 
 ## 4. Lỗi bóng ma (Phantom Read)
 
 ### 📌 Nguyên lý tương tranh
-Khách A truy vấn danh sách suất chiếu của phim lần 1. Trong lúc đó, Admin B chèn thêm một suất chiếu mới. Khách A truy vấn lại lần 2 trong cùng giao dịch và thấy xuất hiện thêm suất chiếu mới (bóng ma).
+Admin 1 tra cứu lịch chiếu ngày hôm đó thấy có 5 suất chiếu. Đúng lúc đó, Admin 2 chèn thêm 1 suất chiếu mới vào cùng ngày này và nhấn Commit. Khi Admin 1 quét lại danh sách lần 2 trong cùng giao dịch, danh sách đột ngột nhảy lên 6 suất chiếu. Suất chiếu thứ 6 này chính là "bóng ma" làm sai lệch tổng số lượng quản lý.
 
 ---
 
 ### 🖥️ Các bước thực hiện Demo
 
-#### Bước 1: Gây lỗi trực tiếp trên giao diện
-1. Trên **Màn hình A (Trái)**, vào **Admin Portal** -> tab **Quầy bán vé (Sales)**.
-2. Chọn Phim, Rạp và Ngày chiếu.
-3. Click vào nút **"Tra cứu suất chiếu (Tương tranh Phantom)"** (mức cô lập mặc định REPEATABLE READ).
-4. **Hành động tương tranh**:
-   * Giao dịch A quét đếm suất chiếu lần 1 và treo chờ 10 giây.
-   * Trong 10 giây đó, hệ thống chạy ngầm lệnh `INSERT` thêm một suất chiếu bóng ma mới vào bảng `Showtime` (đại diện Admin B chèn thành công).
-   * Hết 10 giây, giao dịch A quét lại lần 2.
-5. **Hiện tượng**: Suất chiếu mới ID 999 (phòng PHANTOM) xuất hiện trên màn hình hiển thị của A. Nhật ký SQL báo lỗi Phantom Read.
+#### Bước 1: Thao tác trên Màn hình LỖI (Mức cô lập REPEATABLE READ)
+*(Lưu ý: Mặc định trong Dev Panel, nút "Đã áp dụng cách khắc phục" đang ở trạng thái Tắt)*
+
+1. **Admin 1 (Màn hình trái)**: 
+   * Vào tab **Bán Vé Tại Quầy (Sales)**.
+   * Chọn Phim (ví dụ: *Xứ Cát: Phần Hai*), Rạp (*CGV Vincom Center*), và chọn ngày **04/07/2026**.
+   * Bấm nút **[Tra cứu lịch chiếu]**.
+   * **Đọc lần 1**: Hiển thị danh sách đang có 5 suất chiếu. Hệ thống rơi vào trạng thái chờ (sleep 10 giây).
+2. **Admin 2 (Màn hình phải - Thao tác nhanh trong 10 giây chờ)**:
+   * Vào tab **Quản Lý Suất Chiếu**.
+   * Nhập thông tin suất chiếu mới cùng ngày **04/07/2026** (ví dụ: Phim *Xứ Cát*, Rạp *CGV Vincom Center*, Giờ chiếu *22:37*, Phòng *Hall 1*, Giá vé *standard*).
+   * Bấm nút **[Thêm suất chiếu mới]** (hoặc nút Lưu) $\rightarrow$ Hệ thống báo **Thành công (Commit)** lập tức.
+3. **Admin 1 (Màn hình trái)**:
+   * Hết thời gian chờ 10 giây, hệ thống tự động quét lại **Lần 2**.
+   * **Kết quả**: Danh sách đột ngột nhảy lên **6 suất chiếu** (suất chiếu 22:37 xuất hiện).
+   * **Giao diện**: Xuất hiện cảnh báo màu đỏ nhấp nháy: 
+     > ⚠️ **LỖI PHANTOM READ**: *Xuất hiện dòng dữ liệu mới trong cùng giao dịch!*
 
 ---
 
 ### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
-1. Trên **Dev Panel**, chuyển đổi Isolation Level sang **SERIALIZABLE** (mức cô lập cao nhất).
-2. Click lại nút **"Tra cứu suất chiếu (Tương tranh Phantom)"**.
-3. **Hiện tượng sau khi sửa**:
-   * Giao dịch A thực hiện áp đặt khóa phạm vi (Range Lock).
-   * Tiến trình chèn suất chiếu ngầm bị CSDL **Block hoàn toàn** (treo chờ).
-   * Lần đọc 2 đếm lại cho ra kết quả suất chiếu **nhất quán hoàn toàn** với lần 1. Sau khi A commit, suất chiếu mới mới được chèn vào.
+1. Trên **Dev Panel** của màn hình trái:
+   * Bật nút: **"Đã áp dụng cách khắc phục"** (Nút chuyển sang xanh lục - kích hoạt Giao thức Khóa 2 giai đoạn Strict 2PL / Serializable).
+2. **Admin 1 (Màn hình trái)**:
+   * Bấm lại nút **[Tra cứu lịch chiếu]** để bắt đầu giao dịch A mới (Đọc lần 1 bắt đầu và khóa chặt phạm vi ngày 04/07 lại).
+3. **Admin 2 (Màn hình phải)**:
+   * Tiếp tục nhập một suất chiếu mới khác cùng ngày **04/07/2026** (ví dụ: lúc *23:00*) và bấm **[Thêm suất chiếu mới]**.
+   * **Hiện tượng**: Tiến trình chèn của Admin 2 bị SQL Server **Block hoàn toàn** (trên màn hình Admin 2 xuất hiện vòng xoay Loading chờ, chưa thể commit).
+4. **Admin 1 (Màn hình trái)**:
+   * Hết 10 giây chờ, hệ thống tự động quét lại lần 2 $\rightarrow$ Kết quả nhất quán 100% (chỉ có 5 suất cũ, suất 23:00 chưa xuất hiện).
+   * Giao diện hiện cảnh báo màu xanh:
+     > 🛡️ **THÀNH CÔNG: KHẮC PHỤC PHANTOM READ**: *Đã ngăn chặn thành công nhờ SERIALIZABLE (Khóa phạm vi / Strict 2PL). Admin 2 bị chặn trong lúc Admin 1 đang đọc. Kết quả cả 2 lần đọc nhất quán.*
+   * Ngay sau khi giao dịch của Admin 1 kết thúc (COMMIT), khóa phạm vi được giải phóng $\rightarrow$ Tiến trình của Admin 2 bên phải lập tức báo **Thành công** và suất chiếu 23:00 lúc này mới xuất hiện bình thường ở màn hình trái.
 
 ---
 
@@ -245,8 +264,9 @@ Khách A mua ghế `A1` và `A2` (khóa `A1` trước, chờ khóa `A2`). Khách
 
 ### 🛡️ Cách tiến hành Sửa lỗi (Dùng Dev Panel)
 1. Trên **cả hai màn hình A & B**:
-   * Mở **Dev Panel** -> Bật nút: **"Đã áp dụng cách khắc phục"** (Hệ thống kích hoạt thuật toán tự động sắp xếp lại danh sách ghế chọn theo bảng chữ cái trước khi gửi câu lệnh khóa).
+   * Mở **Dev Panel** -> Bật nút: **"Đã áp dụng cách khắc phục"** (Hệ thống kích hoạt Giao thức Wait-Die bằng cách gán độ ưu tiên Deadlock động cho các Transaction dựa trên thời điểm khởi tạo).
 2. Lặp lại quy trình thao tác chọn ghế: màn A chọn A1 -> A2, màn B chọn A2 -> A1. Click Xác nhận cùng lúc ở trang QR.
 3. **Hiện tượng sau khi sửa**:
-   * Nhờ thuật toán sắp xếp tự động, cả hai luồng A và B dưới CSDL đều thống nhất khóa `A1` trước rồi mới khóa `A2`, loại bỏ hoàn toàn khả năng khóa chéo.
-   * Giao dịch A thực hiện khóa thành công, Giao dịch B xếp hàng chờ một cách có trật tự ở ghế `A1` cho đến khi A commit xong. Không còn lỗi Deadlock xảy ra!
+   * Khi bắt đầu transaction dưới SQL Server, Giao dịch A (Older - vào trước) được thiết lập `SET DEADLOCK_PRIORITY HIGH`, Giao dịch B (Younger - vào sau) được thiết lập `SET DEADLOCK_PRIORITY LOW`.
+   * Khi xảy ra khóa chéo (Deadlock) giữa hai bên, CSDL phát hiện độ ưu tiên và chọn Giao dịch B (Younger, LOW priority) làm nạn nhân để hủy bỏ (`Die` và Rollback) để giải phóng tài nguyên.
+   * Giao dịch A (Older, HIGH priority) được tiếp tục chờ (`Wait`) và hoàn thành việc đặt vé thành công! Màn hình B sẽ hiển thị thông báo Rollback an toàn do bị thu hồi tài nguyên bởi giao thức Wait-Die.

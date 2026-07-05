@@ -2,7 +2,7 @@ import { Router } from "express";
 import { concurrencyMiddleware } from "../middlewares/concurrency";
 import { 
   getAllTickets, getShowtimes, createShowtime, deleteShowtime,
-  checkInTicket, getLocks, addLock, removeLock, clearLocks, bookTicket, deleteTicket 
+  checkInTicket, getLocks, addLock, removeLock, clearLocks, bookTicket, deleteTicket, resetDemoTicket, runPhantomQuery
 } from "../controllers/ticket.controller";
 
 const router = Router();
@@ -14,9 +14,11 @@ router.get("/", getAllTickets as any);
 router.post("/book", bookTicket as any);
 router.post("/check-in", checkInTicket as any);
 router.delete("/:id", deleteTicket as any);
+router.post("/reset-demo", resetDemoTicket as any);
 
 router.get("/showtimes", getShowtimes as any);
 router.post("/showtimes", createShowtime as any);
+router.post("/showtimes/phantom-query", runPhantomQuery as any);
 router.delete("/showtimes/:id", deleteShowtime as any);
 
 router.get("/locks", getLocks as any);

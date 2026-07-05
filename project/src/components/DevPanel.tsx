@@ -252,7 +252,7 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                     </div>
 
                     {/* Apply Lock Fix switch (For Lost Update, Deadlock, and Manual/None scenario) */}
-                    {(config.scenario === "none" || config.scenario === "lost_update" || config.scenario === "deadlock") && (
+                    {(config.scenario === "none" || config.scenario === "lost_update" || config.scenario === "deadlock" || config.scenario === "non_repeatable_read" || config.scenario === "phantom") && (
                       <div className="flex items-center justify-between bg-zinc-900/60 p-3 rounded-xl border border-zinc-800">
                         <div className="flex gap-2">
                           {config.useLockFix ? (
@@ -267,6 +267,8 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                             <p className="text-[10px] text-gray-500 mt-0.5">
                               {config.scenario === "lost_update" ? "Dùng SP có UPDLOCK, HOLDLOCK" : 
                                config.scenario === "deadlock" ? "Sắp xếp tăng dần ID ghế trước khi khóa" : 
+                               config.scenario === "non_repeatable_read" ? "Giao thức Nhãn thời gian cơ bản (TO)" : 
+                               config.scenario === "phantom" ? "Giao thức Khóa 2 giai đoạn (2PL / Serializable)" : 
                                "Kích hoạt UPDLOCK, HOLDLOCK và Sắp xếp tự động"}
                             </p>
                           </div>

@@ -14,8 +14,9 @@ export class ReportService {
     reportType: "date" | "cinema" | "movie";
     latencyMs: number;
     isolationLevel: sql.IIsolationLevel;
+    useLockFix?: boolean;
   }): Promise<{ read1: number; read2: number; data: ReportRow[] }> {
-    const { startDate, endDate, reportType, latencyMs, isolationLevel } = params;
+    const { startDate, endDate, reportType, latencyMs, isolationLevel, useLockFix } = params;
 
     // ==========================================
     // 1. MOCK MODE EXECUTION
@@ -37,11 +38,17 @@ export class ReportService {
       let read2 = read1;
       const isLowIsolation = 
         isolationLevel === sql.ISOLATION_LEVEL.READ_UNCOMMITTED || 
-        isolationLevel === sql.ISOLATION_LEVEL.READ_COMMITTED;
+        isolationLevel === sql.ISOLATION_LEVEL.READ_COMMITTED ||
+        useLockFix; // If useLockFix (TO) is enabled, we allow the background update
 
       if (isLowIsolation && latencyMs > 0 && mockTickets.length > 0) {
         // Mock a background deletion of 1,200,000 VND
         read2 = Math.max(0, read1 - 1200000);
+      }
+
+      // If Timestamp Ordering (useLockFix) is active, detect write conflict and abort/rollback
+      if (useLockFix && read1 !== read2) {
+        throw new Error("LỖI XUNG ĐỘT NHÃN THỜI GIAN (Timestamp Ordering): Giao tác T1 (Older) phát hiện dữ liệu đã bị ghi đè bởi giao tác T2 (Younger). Giao tác T1 bị ROLLBACK!");
       }
 
       // 4. Calculate Grouped Report Data based on final state
@@ -80,8 +87,32 @@ export class ReportService {
       throw new Error("Không thể kết nối cơ sở dữ liệu.");
     }
 
+    // Tự động khôi phục hoặc tạo mới vé mẫu CNS_REVENUE_DEL trước khi chạy giả lập báo cáo doanh thu tương tranh
+    if (latencyMs > 0) {
+      try {
+        await pool.request().query(`
+          IF NOT EXISTS (SELECT 1 FROM Ticket WHERE TicketId = 'CNS_REVENUE_DEL')
+          BEGIN
+            INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status) 
+            VALUES ('CNS_REVENUE_DEL', 1, DATEADD(hour, -2, GETDATE()), 1200000.00, N'Tiền mặt', 'nguyennhutrung788@gmail.com', N'valid');
+            
+            INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price) 
+            VALUES ('CNS_REVENUE_DEL', 1, (SELECT TOP 1 SeatId FROM Seat WHERE RoomId = 1), 1200000.00);
+          END
+          ELSE
+          BEGIN
+            UPDATE Ticket SET Status = N'valid' WHERE TicketId = 'CNS_REVENUE_DEL';
+          END
+        `);
+      } catch (err) {
+        console.error("Lỗi tự động khôi phục/tạo mới vé mẫu:", err);
+      }
+    }
+
     const transaction = new sql.Transaction(pool);
-    await transaction.begin(isolationLevel);
+    // Giao thức nhãn thời gian (Timestamp Ordering) cho phép giao dịch chèn/xoá xen vào dưới READ COMMITTED, sau đó kiểm tra để huỷ bỏ giao tác cũ
+    const actualIsolation = useLockFix ? sql.ISOLATION_LEVEL.READ_COMMITTED : isolationLevel;
+    await transaction.begin(actualIsolation);
 
     try {
       // Client A Read 1
@@ -96,21 +127,23 @@ export class ReportService {
 
       // Trigger background writer Transaction B after 400ms in separate connection pool
       let backgroundWriterFinished = false;
-      setTimeout(async () => {
-        try {
-          const writerPool = await connectDatabase();
-          if (writerPool) {
-            // Transaction B attempts to delete/modify a record (like deleting a ticket with CNS_REVENUE_DEL ID)
-            // If Repeatable Read or Serializable is set, this query will be BLOCKED until Transaction A commits.
-            await writerPool.request().query(`
-              DELETE FROM Ticket WHERE TicketId = 'CNS_REVENUE_DEL'
-            `);
-            backgroundWriterFinished = true;
+      if (latencyMs > 0) {
+        setTimeout(async () => {
+          try {
+            const writerPool = await connectDatabase();
+            if (writerPool) {
+              // Transaction B attempts to delete/modify a record (like deleting a ticket with CNS_REVENUE_DEL ID)
+              // If Repeatable Read or Serializable is set, this query will be BLOCKED until Transaction A commits.
+              await writerPool.request().query(`
+                DELETE FROM Ticket WHERE TicketId = 'CNS_REVENUE_DEL'
+              `);
+              backgroundWriterFinished = true;
+            }
+          } catch (err) {
+            // Ignore writer blocking errors
           }
-        } catch (err) {
-          // Ignore writer blocking errors
-        }
-      }, 400);
+        }, 400);
+      }
 
       // Wait for latency
       if (latencyMs > 0) {
@@ -126,6 +159,10 @@ export class ReportService {
           WHERE BookingTime BETWEEN @start AND @end AND Status != N'canceled'
         `);
       const read2 = check2.recordset[0]?.Total || 0;
+
+      if (useLockFix && read1 !== read2) {
+        throw new Error("LỖI XUNG ĐỘT NHÃN THỜI GIAN (Timestamp Ordering): Giao tác T1 (Older) phát hiện dữ liệu đã bị ghi đè bởi giao tác T2 (Younger). Giao tác T1 bị ROLLBACK!");
+      }
 
       // Load report group items with proper relational joins
       let labelSelect = "CONVERT(VARCHAR(10), t.BookingTime, 23)";

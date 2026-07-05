@@ -191,14 +191,14 @@ export class TicketService {
       .input("price", sql.Decimal(18, 2), price)
       .query(`
         INSERT INTO Showtime (MovieId, RoomId, StartTime, EndTime, Price)
-        OUTPUT INSERTED.*
-        VALUES (@movieId, @roomId, @startTime, @endTime, @price)
+        VALUES (@movieId, @roomId, @startTime, @endTime, @price);
+        SELECT SCOPE_IDENTITY() AS ShowtimeId;
       `);
 
-    const inserted = result.recordset[0];
+    const insertedId = result.recordset[0]?.ShowtimeId;
     return {
-      id: inserted.ShowtimeId,
-      movieId: inserted.MovieId,
+      id: insertedId,
+      movieId: st.movieId,
       cinemaId: st.cinemaId,
       date: st.date,
       time: st.time,
@@ -515,7 +515,7 @@ export class TicketService {
 
   async deleteTicket(ticketId: string): Promise<boolean> {
     if (getMockMode()) {
-      mockTickets = mockTickets.filter(t => t.id !== ticketId);
+      mockTickets = mockTickets.map(t => t.id === ticketId ? { ...t, status: "canceled" } : t);
       return true;
     }
 
@@ -523,10 +523,121 @@ export class TicketService {
     if (!pool) return false;
 
     await pool.request()
-      .input("ticketId", sql.VarChar, ticketId)
-      .query("DELETE FROM Ticket WHERE TicketId = @ticketId");
-    
+      .input("TicketId", sql.VarChar, ticketId)
+      .execute("usp_CancelTicket");
+
     return true;
+  }
+
+  async resetDemoTicket(): Promise<boolean> {
+    if (getMockMode()) {
+      const mockDel = mockTickets.find(t => t.id === 'CNS_REVENUE_DEL');
+      if (mockDel) mockDel.status = 'valid';
+      return true;
+    }
+
+    const pool = await connectDatabase();
+    if (!pool) return false;
+
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT 1 FROM Ticket WHERE TicketId = 'CNS_REVENUE_DEL')
+      BEGIN
+        INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status) 
+        VALUES ('CNS_REVENUE_DEL', 1, DATEADD(hour, -2, GETDATE()), 1200000.00, N'Tiền mặt', 'nguyennhutrung788@gmail.com', N'valid');
+        
+        INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price) 
+        VALUES ('CNS_REVENUE_DEL', 1, (SELECT TOP 1 SeatId FROM Seat WHERE RoomId = 1), 1200000.00);
+      END
+      ELSE
+      BEGIN
+        UPDATE Ticket SET Status = N'valid' WHERE TicketId = 'CNS_REVENUE_DEL';
+      END
+    `);
+    return true;
+  }
+
+  async runPhantomQuery(
+    movieId: number,
+    cinemaId: number,
+    date: string,
+    latencyMs: number,
+    useLockFix: boolean
+  ): Promise<{ read1: any[]; read2: any[] }> {
+    if (getMockMode()) {
+      // Return local mock data for mock mode
+      const list = mockShowtimes.filter(s => s.movieId === movieId && s.cinemaId === cinemaId && s.date === date);
+      return { read1: list, read2: list };
+    }
+
+    const pool = await connectDatabase();
+    if (!pool) {
+      throw new Error("Không thể kết nối cơ sở dữ liệu.");
+    }
+
+    const transaction = new sql.Transaction(pool);
+    const isolation = useLockFix ? sql.ISOLATION_LEVEL.SERIALIZABLE : sql.ISOLATION_LEVEL.REPEATABLE_READ;
+    await transaction.begin(isolation);
+
+    try {
+      const fetchShowtimes = async (tx: sql.Transaction) => {
+        const result = await tx.request()
+          .input("movieId", sql.Int, movieId)
+          .input("cinemaId", sql.Int, cinemaId)
+          .input("date", sql.VarChar, date)
+          .query(`
+            SELECT 
+              st.ShowtimeId, st.MovieId, st.RoomId, st.StartTime, st.EndTime, st.Price,
+              r.RoomName, r.CinemaId, r.Capacity,
+              (SELECT COUNT(*) FROM Seat WHERE RoomId = st.RoomId) as TotalSeats,
+              (
+                (SELECT COUNT(*) FROM Seat WHERE RoomId = st.RoomId) - 
+                (SELECT COUNT(*) FROM TicketDetail td JOIN Ticket t ON td.TicketId = t.TicketId WHERE td.ShowtimeId = st.ShowtimeId AND t.Status != N'canceled')
+              ) as AvailableSeats
+            FROM Showtime st
+            JOIN Room r ON st.RoomId = r.RoomId
+            WHERE st.MovieId = @movieId AND r.CinemaId = @cinemaId AND CONVERT(VARCHAR(10), st.StartTime, 120) = @date
+          `);
+        return result.recordset.map(row => {
+          const startTime = new Date(row.StartTime);
+          const year = startTime.getFullYear();
+          const month = String(startTime.getMonth() + 1).padStart(2, '0');
+          const day = String(startTime.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          const timeStr = String(startTime.getHours()).padStart(2, '0') + ":" + String(startTime.getMinutes()).padStart(2, '0');
+          return {
+            id: row.ShowtimeId,
+            movieId: row.MovieId,
+            cinemaId: row.CinemaId,
+            roomId: row.RoomId,
+            date: dateStr,
+            time: timeStr,
+            hall: row.RoomName,
+            type: row.Price > 100000 ? "imax" : "standard",
+            availableSeats: row.AvailableSeats,
+            totalSeats: row.TotalSeats,
+            price: row.Price
+          };
+        });
+      };
+
+      const read1 = await fetchShowtimes(transaction);
+
+      if (latencyMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, latencyMs));
+      }
+
+      const read2 = await fetchShowtimes(transaction);
+
+      await transaction.commit();
+      return { read1, read2 };
+    } catch (err) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackErr) {
+        // Ignored
+      }
+      throw err;
+    }
   }
 }
 

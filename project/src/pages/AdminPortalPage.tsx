@@ -12,7 +12,7 @@ import {
   loadRooms, saveRooms, loadSeatPricing, saveSeatPricing, RoomConfig,
   syncWithBackend
 } from "../lib/db";
-import { checkBackendOnline, getRevenueReportAPI, checkInTicketAPI } from "../lib/api";
+import { checkBackendOnline, getRevenueReportAPI, checkInTicketAPI, deleteTicketAPI, resetDemoTicketAPI } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
 interface AdminPortalPageProps {
@@ -375,13 +375,64 @@ export default function AdminPortalPage({
 
   // Load database
   useEffect(() => {
-    setMoviesList(loadMovies());
-    setShowtimesList(loadShowtimes());
-    setTicketsList(loadTickets());
-    loadCustomers();
-    setRoomsList(loadRooms());
-    setSeatPricing(loadSeatPricing());
+    const initData = async () => {
+      try {
+        const online = await checkBackendOnline();
+        if (online) {
+          await resetDemoTicketAPI();
+          await syncWithBackend();
+        }
+      } catch (err) {
+        console.error("Failed to reset demo ticket on mount:", err);
+      }
+      setMoviesList(loadMovies());
+      setShowtimesList(loadShowtimes());
+      setTicketsList(loadTickets());
+      loadCustomers();
+      setRoomsList(loadRooms());
+      setSeatPricing(loadSeatPricing());
+    };
+    initData();
   }, []);
+
+  // Auto sync with database in the background every 3 seconds to show live updates
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const online = await checkBackendOnline();
+        if (online) {
+          // Only auto-sync if we are NOT in the middle of a non-repeatable read transaction simulation
+          // to avoid interfering with the simulated 10-second latency/rollback sequence
+          if (!nonRepResults.isActive) {
+            await syncWithBackend();
+            refreshDB();
+            
+            // If the report is open, refresh it automatically!
+            if (hasSearchedReport) {
+              const res = await getRevenueReportAPI({
+                startDate: reportStartDate,
+                endDate: reportEndDate,
+                reportType: reportType,
+                isolationLevel: "READ_COMMITTED",
+                latencyMs: 0
+              });
+              const result = res.data;
+              if (reportType === "date") {
+                result.sort((a: any, b: any) => a.label.localeCompare(b.label));
+              } else {
+                result.sort((a: any, b: any) => b.revenue - a.revenue);
+              }
+              setReportData(result);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Auto sync error:", err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [reportStartDate, reportEndDate, reportType, hasSearchedReport, nonRepResults.isActive]);
 
   const refreshDB = () => {
     setMoviesList(loadMovies());
@@ -825,6 +876,27 @@ export default function AdminPortalPage({
     }
   };
 
+  const handleCancelTicket = async (id: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn hủy/hoàn vé này không?")) return;
+    try {
+      const online = await checkBackendOnline();
+      if (online) {
+        await deleteTicketAPI(id);
+        await syncWithBackend();
+      } else {
+        updateTicketStatus(id, "canceled");
+      }
+      refreshDB();
+      // Update local search result state
+      if (searchTicketResult && searchTicketResult.id === id) {
+        setSearchTicketResult(prev => prev ? { ...prev, status: "canceled" } : null);
+      }
+      alert("Đã hủy vé thành công!");
+    } catch (err: any) {
+      alert(`Lỗi hủy vé: ${err.message}`);
+    }
+  };
+
   // Calculate statistics
   const totalRevenue = ticketsList.reduce((sum, t) => sum + t.totalPrice, 0);
   const totalTicketsSold = ticketsList.reduce((sum, t) => sum + t.seats.length, 0);
@@ -1198,80 +1270,7 @@ export default function AdminPortalPage({
                 </div>
               )}
 
-              {/* Default Overview (If not searched yet) */}
-              {!hasSearchedReport && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                  {/* Revenue by Movie */}
-                  <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-                    <div className="flex items-center gap-2 mb-6">
-                      <TrendingUp className="w-5 h-5 text-red-500" />
-                      <h3 className="text-white font-bold">Top Doanh Thu Theo Phim</h3>
-                    </div>
-
-                    <div className="space-y-4">
-                      {revenueByMovieArray.length > 0 ? (
-                        revenueByMovieArray.slice(0, 5).map((item, idx) => {
-                          const maxVal = Math.max(...revenueByMovieArray.map(i => i.revenue)) || 1;
-                          const percent = (item.revenue / maxVal) * 100;
-                          return (
-                            <div key={idx} className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-300 font-medium truncate max-w-xs">{item.title}</span>
-                                <span className="text-white font-semibold">{formatPrice(item.revenue)}</span>
-                              </div>
-                              <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-                                <div
-                                  className="bg-red-600 h-full rounded-full transition-all duration-1000"
-                                  style={{ width: `${percent}%` }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="text-center py-10 text-gray-500 text-sm">
-                          Chưa có dữ liệu giao dịch đặt vé trực tuyến.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Quick Info */}
-                  <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
-                    <h3 className="text-white font-bold mb-4">Hoạt Động Gần Đây</h3>
-                    <div className="space-y-4 max-h-72 overflow-y-auto">
-                      {ticketsList.length > 0 ? (
-                        ticketsList.slice(0, 5).map((t, idx) => (
-                          <div key={idx} className="flex gap-3 text-xs border-b border-zinc-800 pb-3 last:border-0 last:pb-0">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-bold ${t.status === "used" ? "bg-zinc-800 text-gray-500" : "bg-red-950 text-red-400"
-                              }`}>
-                              Ticket
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-white font-medium truncate">{t.movieTitle}</p>
-                              <p className="text-gray-400 mt-0.5">Mã: {t.id} • {t.seats.join(", ")}</p>
-                              <p className="text-gray-500 mt-0.5">{t.bookedAt}</p>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-white font-bold">{formatPrice(t.totalPrice)}</span>
-                              <span className={`block mt-1 text-[10px] ${t.status === "used" ? "text-gray-500" : "text-green-500"
-                                }`}>
-                                {t.status === "used" ? "Đã dùng" : "Chưa dùng"}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-10 text-gray-500 text-sm">
-                          Chưa có giao dịch gần đây.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-              )}
             </div>
           )}
 
@@ -1471,11 +1470,18 @@ export default function AdminPortalPage({
                           <h4 className="text-white font-bold text-base leading-tight">{searchTicketResult.movieTitle}</h4>
                           <p className="text-gray-400 text-xs mt-1.5">{searchTicketResult.cinemaName} • {searchTicketResult.hall}</p>
                         </div>
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${searchTicketResult.status === "used"
-                          ? "bg-zinc-800 text-gray-500 border border-zinc-700"
-                          : "bg-green-600/10 text-green-400 border border-green-500/20"
-                          }`}>
-                          {searchTicketResult.status === "used" ? "Đã sử dụng" : "Hợp lệ"}
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                          searchTicketResult.status === "used"
+                            ? "bg-zinc-800 text-gray-500 border border-zinc-700"
+                            : searchTicketResult.status === "canceled"
+                            ? "bg-red-950 text-red-400 border border-red-900/30"
+                            : "bg-green-600/10 text-green-400 border border-green-500/20"
+                        }`}>
+                          {searchTicketResult.status === "used" 
+                            ? "Đã sử dụng" 
+                            : searchTicketResult.status === "canceled"
+                            ? "Đã hủy"
+                            : "Hợp lệ"}
                         </span>
                       </div>
 
@@ -1499,16 +1505,26 @@ export default function AdminPortalPage({
                       </div>
 
                       {searchTicketResult.status === "valid" ? (
-                        <button
-                          onClick={() => handleCheckIn(searchTicketResult.id)}
-                          className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm mt-2 shadow-lg shadow-green-600/10"
-                        >
-                          <Check className="w-4 h-4" />
-                          Xác Nhận Soát Vé (Cho Vào Rạp)
-                        </button>
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => handleCheckIn(searchTicketResult.id)}
+                            className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-green-600/10"
+                          >
+                            <Check className="w-4 h-4" />
+                            Xác Nhận Soát Vé
+                          </button>
+                          <button
+                            onClick={() => handleCancelTicket(searchTicketResult.id)}
+                            className="flex-1 bg-red-650 hover:bg-red-550 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-red-600/10"
+                          >
+                            Hủy Vé
+                          </button>
+                        </div>
                       ) : (
                         <div className="text-center py-2.5 text-gray-500 text-xs font-semibold bg-zinc-900 rounded-xl border border-zinc-800/50">
-                          Vé này đã được check-in lúc {searchTicketResult.bookedAt}
+                          {searchTicketResult.status === "used"
+                            ? `Vé này đã được check-in lúc ${searchTicketResult.bookedAt}`
+                            : "Vé này đã bị hủy bỏ!"}
                         </div>
                       )}
                     </div>
@@ -1537,11 +1553,14 @@ export default function AdminPortalPage({
                           </div>
                           <div className="text-right flex flex-col items-end gap-1">
                             <span className="text-white font-bold text-sm">{formatPrice(t.totalPrice)}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.status === "used"
-                              ? "bg-zinc-800 text-gray-500"
-                              : "bg-green-600/10 text-green-400 border border-green-500/10"
-                              }`}>
-                              {t.status === "used" ? "Đã dùng" : "Chưa dùng"}
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              t.status === "used"
+                                ? "bg-zinc-800 text-gray-500"
+                                : t.status === "canceled"
+                                ? "bg-red-950 text-red-400 border border-red-900/30"
+                                : "bg-green-600/10 text-green-400 border border-green-500/10"
+                            }`}>
+                              {t.status === "used" ? "Đã dùng" : t.status === "canceled" ? "Đã hủy" : "Chưa dùng"}
                             </span>
                           </div>
                         </div>

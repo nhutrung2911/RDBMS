@@ -130,11 +130,36 @@ export async function bookTicket(req: ConcurrencyRequest, res: Response, next: N
   }
 }
 
-export async function deleteTicket(req: Request, res: Response, next: NextFunction) {
+export async function deleteTicket(req: ConcurrencyRequest, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const success = await ticketService.deleteTicket(id);
     res.json({ success });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function resetDemoTicket(req: ConcurrencyRequest, res: Response, next: NextFunction) {
+  try {
+    const success = await ticketService.resetDemoTicket();
+    res.json({ success });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function runPhantomQuery(req: ConcurrencyRequest, res: Response, next: NextFunction) {
+  try {
+    const { movieId, cinemaId, date, latencyMs, useLockFix } = req.body;
+    const result = await ticketService.runPhantomQuery(
+      Number(movieId),
+      Number(cinemaId),
+      String(date),
+      Number(latencyMs),
+      Boolean(useLockFix)
+    );
+    res.json(result);
   } catch (error) {
     next(error);
   }

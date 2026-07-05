@@ -306,7 +306,6 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
     // 2. DEADLOCK SCENARIO
     else if (concurrencyConfig.scenario === "deadlock" && selectedSeats.length >= 2) {
       const [seat1, seat2] = selectedSeats;
-      const sorted = [...selectedSeats].sort();
       
       setSimState({
         isActive: true,
@@ -319,15 +318,16 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
         addSqlLog(`CLIENT A: SET TRANSACTION ISOLATION LEVEL READ COMMITTED;`, "query");
         addSqlLog(`CLIENT A: BEGIN TRANSACTION A (${txId});`, "query");
         if (concurrencyConfig.useLockFix) {
-          addSqlLog(`CLIENT A (Sửa lỗi): Tự động sắp xếp dãy ghế chọn: ${sorted.join(', ')}`, "success");
-          addSqlLog(`CLIENT A: Khóa ghế đầu tiên '${sorted[0]}' trong danh sách...`, "lock");
+          addSqlLog(`CLIENT A (Wait-Die): SET DEADLOCK_PRIORITY HIGH; (Older - Giao dịch già được quyền chờ)`, "success");
+          addSqlLog(`CLIENT A: Khóa ghế '${seat1}' đầu tiên...`, "lock");
         } else {
           addSqlLog(`CLIENT A: Khóa ghế '${seat1}' đầu tiên...`, "lock");
         }
       }
 
-      const seatsA = concurrencyConfig.useLockFix ? sorted : [seat1, seat2];
-      const seatsB = concurrencyConfig.useLockFix ? sorted : [seat2, seat1];
+      // Wait-Die: Giữ nguyên khóa chéo (không sắp xếp thứ tự ghế) để tạo deadlock thực tế trong SQL Server
+      const seatsA = [seat1, seat2];
+      const seatsB = [seat2, seat1];
 
       const txBId = "TX_B_" + Math.random().toString(36).substring(2, 6).toUpperCase();
 
@@ -335,9 +335,10 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
         if (addSqlLog) {
           addSqlLog(`CLIENT B: BEGIN TRANSACTION B (${txBId});`, "query");
           if (concurrencyConfig.useLockFix) {
-            addSqlLog(`CLIENT B: Tự động sắp xếp dãy ghế: ${sorted.join(', ')}`, "success");
-            addSqlLog(`CLIENT B: Thử khóa ghế '${sorted[0]}' đầu tiên...`, "lock");
-            addSqlLog(`CLIENT B: [BLOCKED] Ghế '${sorted[0]}' đang bị giữ bởi CLIENT A. Đang xếp hàng chờ...`, "lock");
+            addSqlLog(`CLIENT B (Wait-Die): SET DEADLOCK_PRIORITY LOW; (Younger - Giao dịch trẻ bị chết)`, "success");
+            addSqlLog(`CLIENT B: Khóa thành công ghế '${seat2}'.`, "success");
+            addSqlLog(`CLIENT B: Yêu cầu khóa tiếp ghế '${seat1}'...`, "lock");
+            addSqlLog(`CLIENT B: [BLOCKED] Đang chờ CLIENT A giải phóng ghế '${seat1}'...`, "lock");
           } else {
             addSqlLog(`CLIENT B: Khóa thành công ghế '${seat2}'.`, "success");
             addSqlLog(`CLIENT B: Yêu cầu khóa tiếp ghế '${seat1}'...`, "lock");
@@ -348,7 +349,7 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
         if (concurrencyConfig.useLockFix) {
           setSimState(prev => ({
             ...prev,
-            message: `Giao dịch B tự động xếp hàng chờ (Blocked) ở ghế ${sorted[0]} thay vì khóa chéo. Không có Deadlock!`,
+            message: `Giao dịch A (HIGH) và Giao dịch B (LOW) đang giữ khóa chéo. Giao dịch B sẽ bị chọn làm nạn nhân (Die) để A hoàn thành!`,
             stage: 'blocked'
           }));
         } else {
@@ -375,17 +376,18 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
           latencyMs: 0
         }).then(res => {
           if (addSqlLog) {
-            if (concurrencyConfig.useLockFix) {
-              addSqlLog(`CLIENT B: [RESUMED] Bắt đầu xử lý khóa.`, "lock");
-              addSqlLog(`CLIENT B: Nhận thấy ghế '${sorted[0]}' đã bán. Tự động hủy và ROLLBACK.`, "error");
-            } else {
-              addSqlLog(`CLIENT B: [RESUMED] Khóa '${seat1}' được giải phóng. CLIENT B đặt vé thành công!`, "success");
-            }
+            addSqlLog(`CLIENT B: [RESUMED] Khóa '${seat1}' được giải phóng. CLIENT B đặt vé thành công!`, "success");
           }
           return res;
         }).catch(err => {
           if (addSqlLog) {
-            addSqlLog(`CLIENT B: Lỗi: ${err.message}`, "error");
+            if (err.message.includes("deadlock") || err.message.includes("1205")) {
+              addSqlLog(`[DEADLOCK RESOLVED BY WAIT-DIE]`, "error");
+              addSqlLog(`DATABASE ENGINE: Chọn TRANSACTION B (Younger, Priority LOW) làm nạn nhân (Deadlock Victim) để giải phóng tài nguyên.`, "error");
+              addSqlLog(`CLIENT B: Giao dịch B bị deadlock và ROLLBACK an toàn!`, "error");
+            } else {
+              addSqlLog(`CLIENT B: Lỗi: ${err.message}`, "error");
+            }
           }
           throw err;
         });
@@ -410,9 +412,9 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
 
         if (addSqlLog) {
           if (concurrencyConfig.useLockFix) {
-            addSqlLog(`CLIENT A: Khóa tiếp ghế '${sorted[1]}'.`, "lock");
-            addSqlLog(`CLIENT A: UPDATE Seat SET SeatStatus = 'SOLD' FOR BOTH; COMMIT;`, "query");
-            addSqlLog(`CLIENT A: Hoàn tất đặt vé! Giao dịch A committed. Giải phóng khóa.`, "success");
+            addSqlLog(`CLIENT A: Khóa tiếp ghế '${seat2}' thành công.`, "lock");
+            addSqlLog(`CLIENT A: UPDATE TicketDetail; COMMIT;`, "query");
+            addSqlLog(`CLIENT A: Đặt vé thành công! Giao dịch A committed.`, "success");
           } else {
             addSqlLog(`CLIENT A: Yêu cầu khóa tiếp ghế '${seat2}'...`, "lock");
             addSqlLog(`CLIENT A: Đặt vé thành công!`, "success");
@@ -425,7 +427,7 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
         setSimState({
           isActive: true,
           message: concurrencyConfig.useLockFix
-            ? `SỬA LỖI THÀNH CÔNG: Sắp xếp thứ tự khóa tránh được Deadlock. Giao dịch A đặt vé thành công, Giao dịch B chờ đợi và tự rollback an toàn.`
+            ? `SỬA LỖI THÀNH CÔNG (Wait-Die): Giao dịch A (Older) được ưu tiên chạy tiếp, Giao dịch B (Younger) bị hủy (Die) để tránh tắc nghẽn.`
             : `Giao dịch A đặt vé thành công.`,
           stage: 'success'
         });

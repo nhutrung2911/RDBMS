@@ -16,7 +16,8 @@ export async function getRevenueReport(req: ConcurrencyRequest, res: Response, n
       endDate,
       reportType,
       latencyMs,
-      isolationLevel
+      isolationLevel,
+      useLockFix: req.useLockFix || false
     });
 
     res.json({
