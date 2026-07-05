@@ -183,8 +183,7 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
         addSqlLog(`CLIENT A: SET TRANSACTION ISOLATION LEVEL READ COMMITTED;`, "query");
         addSqlLog(`CLIENT A: BEGIN TRANSACTION A (${txId});`, "query");
         if (concurrencyConfig.useLockFix) {
-          addSqlLog(`CLIENT A: SELECT Status FROM v_ShowtimeSeats WHERE SeatNumber = '${seat}'; (Read Phase)`, "query");
-          addSqlLog(`CLIENT A: Ghế '${seat}' trống. Bắt đầu giai đoạn xử lý...`, "info");
+          addSqlLog(`CLIENT A: SELECT SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatNumber = '${seat}';`, "lock");
         } else {
           addSqlLog(`CLIENT A: SELECT SeatId FROM Seat WHERE SeatNumber = '${seat}';`, "query");
         }
@@ -196,8 +195,8 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
         if (addSqlLog) {
           addSqlLog(`CLIENT B: BEGIN TRANSACTION B (${txBId});`, "query");
           if (concurrencyConfig.useLockFix) {
-            addSqlLog(`CLIENT B: SELECT Status FROM v_ShowtimeSeats WHERE SeatNumber = '${seat}'; (Read Phase)`, "query");
-            addSqlLog(`CLIENT B: Ghế '${seat}' trống. Tiến hành Validation và COMMIT thành công trước A!`, "success");
+            addSqlLog(`CLIENT B: SELECT SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatNumber = '${seat}';`, "lock");
+            addSqlLog(`CLIENT B: [BLOCKED] Đang đợi giải phóng khóa UPDLOCK trên dòng ghế '${seat}'...`, "lock");
           } else {
             addSqlLog(`CLIENT B: SELECT SeatId FROM Seat WHERE SeatNumber = '${seat}';`, "query");
             addSqlLog(`CLIENT B: Ghế '${seat}' đang trống (Dirty/Uncommitted Read). CLIENT B chuẩn bị đặt đè.`, "info");
@@ -207,8 +206,8 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
         if (concurrencyConfig.useLockFix) {
           setSimState(prev => ({
             ...prev,
-            message: `Giao dịch B chạy song song và thực hiện COMMIT thành công trước. Giao dịch A chuẩn bị bước vào Validation...`,
-            stage: 'running'
+            message: `Giao dịch B đang bị KHÓA CHỜ (Blocked) do Giao dịch A đang giữ khóa UPDLOCK trên ghế ${seat}...`,
+            stage: 'blocked'
           }));
         }
 

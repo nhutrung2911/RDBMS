@@ -363,8 +363,19 @@ export class TicketService {
     await transaction.begin(isolationLevel);
 
     try {
-      // 1. READ PHASE: Check initial seat status (No locking hints held during latency under OCC)
+      // 1. READ PHASE: Check initial seat status
       for (const seat of seats) {
+        // If useLockFix is true, acquire UPDLOCK, HOLDLOCK on the Seat row to block other transactions
+        if (useLockFix) {
+          await transaction.request()
+            .input("showtimeId", sql.Int, showtimeId)
+            .input("seatNumber", sql.VarChar, seat)
+            .query(`
+              SELECT SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK)
+              WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId)
+            `);
+        }
+
         const seatCheck = await transaction.request()
           .input("showtimeId", sql.Int, showtimeId)
           .input("seatNumber", sql.VarChar, seat)
