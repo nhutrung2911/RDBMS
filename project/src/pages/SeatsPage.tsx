@@ -3,7 +3,8 @@ import { ArrowLeft, Monitor, ChevronRight, CheckCircle2, ShieldAlert, AlertTrian
 import type { Movie, Showtime } from "../data/movies";
 import { cinemas, TICKET_PRICES } from "../data/movies";
 import { 
-  loadSeatLocks, loadTickets, isSeatLocked, loadRooms, loadSeatPricing, syncWithBackend
+  loadSeatLocks, loadTickets, isSeatLocked, loadRooms, loadSeatPricing, syncWithBackend,
+  addSeatLock
 } from "../lib/db";
 import { bookTicketAPI } from "../lib/api";
 
@@ -15,7 +16,8 @@ interface SeatsPageProps {
   onConfirm: (
     seats: string[], 
     total: number, 
-    combos: { name: string; quantity: number; price: number }[]
+    combos: { name: string; quantity: number; price: number }[],
+    code?: string
   ) => void;
   concurrencyConfig?: any;
   addSqlLog?: (message: string, type?: 'info' | 'query' | 'lock' | 'success' | 'error') => void;
@@ -79,6 +81,7 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
     message: "",
     stage: 'idle'
   });
+  const [isProcessingNext, setIsProcessingNext] = useState(false);
 
   // Merge locks from DB
   useEffect(() => {
@@ -713,7 +716,7 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
 
           <button
             onClick={async () => {
-              if (selectedSeats.length === 0) return;
+              if (selectedSeats.length === 0 || isProcessingNext) return;
               
               // 1. Sync locks and tickets from database
               try {
@@ -731,19 +734,58 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
                 }
               }
 
-              // Normal flow: proceed to Payment QR page
-              const combosList: { name: string; quantity: number; price: number }[] = [];
-              onConfirm(selectedSeats, totalPrice, combosList);
+              // 3. Simulate delay if devModeEnabled is true to illustrate lock acquisition phase
+              if (concurrencyConfig?.devModeEnabled) {
+                setIsProcessingNext(true);
+                const code = "CNS" + Math.random().toString(36).substring(2, 8).toUpperCase();
+                
+                // Immediately acquire lock
+                for (const seat of selectedSeats) {
+                  addSeatLock(showtime.id, seat, `TX_${code}`, 'pending', 600000);
+                }
+                
+                try {
+                  await syncWithBackend();
+                } catch (e) {
+                  console.error(e);
+                }
+
+                if (addSqlLog) {
+                  addSqlLog(`CLIENT A: Đang chiếm giữ tạm thời ghế '${selectedSeats.join(', ')}' và kiểm tra xung đột... (Độ trễ mô phỏng: ${concurrencyConfig.latencyMs}ms)`, "lock");
+                }
+
+                setTimeout(() => {
+                  setIsProcessingNext(false);
+                  const combosList: { name: string; quantity: number; price: number }[] = [];
+                  onConfirm(selectedSeats, totalPrice, combosList, code);
+                }, concurrencyConfig.latencyMs || 5000);
+              } else {
+                const code = "CNS" + Math.random().toString(36).substring(2, 8).toUpperCase();
+                selectedSeats.forEach(seat => {
+                  addSeatLock(showtime.id, seat, `TX_${code}`, 'pending', 600000);
+                });
+                const combosList: { name: string; quantity: number; price: number }[] = [];
+                onConfirm(selectedSeats, totalPrice, combosList, code);
+              }
             }}
-            disabled={selectedSeats.length === 0}
+            disabled={selectedSeats.length === 0 || isProcessingNext}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${
-              selectedSeats.length > 0
+              selectedSeats.length > 0 && !isProcessingNext
                 ? "bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/20 hover:shadow-red-600/40"
                 : "bg-zinc-800 text-gray-600 cursor-not-allowed"
             }`}
           >
-            Tiếp Theo
-            <ChevronRight className="w-4 h-4" />
+            {isProcessingNext ? (
+              <span className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Đang giữ ghế (Khóa tạm thời)...
+              </span>
+            ) : (
+              <>
+                Tiếp Theo
+                <ChevronRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </div>
       </div>

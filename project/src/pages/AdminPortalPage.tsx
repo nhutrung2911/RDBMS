@@ -12,7 +12,7 @@ import {
   loadRooms, saveRooms, loadSeatPricing, saveSeatPricing, RoomConfig,
   syncWithBackend
 } from "../lib/db";
-import { checkBackendOnline, getRevenueReportAPI, checkInTicketAPI, deleteTicketAPI, resetDemoTicketAPI } from "../lib/api";
+import { checkBackendOnline, getRevenueReportAPI, checkInTicketAPI, deleteTicketAPI, resetDemoTicketAPI, createShowtimeAPI, deleteShowtimeAPI, runPhantomQueryAPI } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
 interface AdminPortalPageProps {
@@ -90,6 +90,7 @@ export default function AdminPortalPage({
   });
 
   const [showShowtimeModal, setShowShowtimeModal] = useState(false);
+  const [isSavingShowtime, setIsSavingShowtime] = useState(false);
   const [showtimeForm, setShowtimeForm] = useState<Partial<Showtime>>({
     movieId: 1, cinemaId: 1, date: new Date().toISOString().split("T")[0],
     time: "18:00", hall: "Hall 1", type: "standard", availableSeats: 100, totalSeats: 100
@@ -110,93 +111,116 @@ export default function AdminPortalPage({
 
   const [phantomShowtimes, setPhantomShowtimes] = useState<Showtime[]>([]);
   const [phantomActive, setPhantomActive] = useState(false);
+  const [phantomResult, setPhantomResult] = useState<'none' | 'error' | 'success'>('none');
 
   // Phantom Read simulation effect
   useEffect(() => {
     if (activeTab !== "sales" || !selectedSalesMovie || !selectedSalesCinema || !selectedSalesDate) {
       setPhantomActive(false);
       setPhantomShowtimes([]);
+      setPhantomResult('none');
       return;
     }
 
     if (!(concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === 'phantom')) {
       setPhantomActive(false);
       setPhantomShowtimes([]);
+      setPhantomResult('none');
       return;
     }
 
     const runPhantomSimulation = async () => {
       setPhantomActive(true);
       setPhantomShowtimes([]);
-      const delay = concurrencyConfig.latencyMs || 1500;
+      const delay = concurrencyConfig.latencyMs || 10000;
       const txId = "TX_PHAN_" + Math.random().toString(36).substring(2, 6).toUpperCase();
+      const useLockFix = concurrencyConfig.useLockFix;
 
       if (addSqlLog) {
         addSqlLog(`--- KHỞI ĐẦU GIẢ LẬP PHANTOM READ ---`, "info");
+        addSqlLog(`CLIENT A: SET TRANSACTION ISOLATION LEVEL ${useLockFix ? "SERIALIZABLE" : "REPEATABLE READ"};`, "query");
         addSqlLog(`CLIENT A: BEGIN TRANSACTION A (${txId});`, "query");
         addSqlLog(`CLIENT A: SELECT * FROM Showtime WHERE MovieID = ${selectedSalesMovie.id} AND CinemaID = ${selectedSalesCinema.id} AND Date = '${selectedSalesDate}';`, "query");
-      }
-
-      // Simultaneously trigger B insert after 400ms
-      let backgroundInsertSuccess = false;
-      setTimeout(() => {
-        const txBId = "TX_INS_" + Math.random().toString(36).substring(2, 6).toUpperCase();
-        if (addSqlLog) {
-          addSqlLog(`CLIENT B: BEGIN TRANSACTION B (${txBId});`, "query");
-        }
-
-        if (concurrencyConfig.isolationLevel === "SERIALIZABLE") {
-          if (addSqlLog) {
-            addSqlLog(`CLIENT B: INSERT INTO Showtime (MovieID, CinemaID, Date, Time, Hall, Type) VALUES (${selectedSalesMovie.id}, ${selectedSalesCinema.id}, '${selectedSalesDate}', '20:30', 'Hall 4', 'imax');`, "query");
-            addSqlLog(`CLIENT B: [BLOCKED] Không thể chèn suất chiếu mới do CLIENT A đang giữ khóa phạm vi (Range Lock/Serializable).`, "lock");
-          }
+        if (useLockFix) {
+          addSqlLog(`CLIENT A: [2PL - Strict Two-Phase Locking] Giao thức 2PL áp dụng Khóa phạm vi (Range Lock) cho tập kết quả trên ngày '${selectedSalesDate}'. Mọi INSERT vào vùng này sẽ bị chặn.`, "lock");
         } else {
-          backgroundInsertSuccess = true;
-          if (addSqlLog) {
-            addSqlLog(`CLIENT B: INSERT INTO Showtime (MovieID, CinemaID, Date, Time, Hall, Type) VALUES (${selectedSalesMovie.id}, ${selectedSalesCinema.id}, '${selectedSalesDate}', '20:30', 'Hall 4', 'imax');`, "query");
-            addSqlLog(`CLIENT B: COMMIT TRANSACTION B;`, "success");
-            addSqlLog(`CLIENT B: Thêm suất chiếu 20:30 (IMAX) thành công chạy ngầm!`, "success");
-          }
+          addSqlLog(`CLIENT A: [REPEATABLE READ] Không áp Range Lock. Các giao dịch khác có thể chèn (INSERT) bản ghi mới vào tập kết quả → gây ra Phantom Read.`, "info");
         }
-      }, 400);
-
-      await new Promise(resolve => setTimeout(resolve, delay));
-
-      if (addSqlLog) {
-        addSqlLog(`CLIENT A: SELECT * FROM Showtime WHERE MovieID = ${selectedSalesMovie.id} AND CinemaID = ${selectedSalesCinema.id} AND Date = '${selectedSalesDate}'; (Truy vấn lại lần 2)`, "query");
       }
 
-      if (backgroundInsertSuccess) {
-        const phantomSt: Showtime = {
-          id: 999,
+      try {
+        const result = await runPhantomQueryAPI({
           movieId: selectedSalesMovie.id,
           cinemaId: selectedSalesCinema.id,
           date: selectedSalesDate,
-          time: "20:30",
-          hall: "Hall 4 (PHANTOM)",
-          type: "imax",
-          availableSeats: 120,
-          totalSeats: 120
-        };
-        setPhantomShowtimes([phantomSt]);
-        if (addSqlLog) {
-          addSqlLog(`CLIENT A: Kết quả truy vấn xuất hiện dòng dữ liệu mới (Showtime ID 999 - 20:30).`, "error");
-          addSqlLog(`[LỖI] PHANTOM READ XẢY RA: Bản ghi mới xuất hiện trong cùng một giao dịch đọc!`, "error");
-        }
-      } else {
-        if (addSqlLog) {
-          addSqlLog(`CLIENT A: Kết quả nhất quán. Giải phóng khóa phạm vi.`, "success");
-          addSqlLog(`CLIENT B: [RESUMED] Transaction A committed. Client B now inserts showtime...`, "success");
-          addSqlLog(`[THÀNH CÔNG] ĐÃ TRÁNH ĐƯỢC PHANTOM READ nhờ SERIALIZABLE.`, "success");
-        }
-      }
+          latencyMs: delay,
+          useLockFix: useLockFix
+        });
 
-      if (addSqlLog) {
-        addSqlLog(`CLIENT A: COMMIT TRANSACTION A;`, "success");
-        addSqlLog(`--- KẾT THÚC GIẢ LẬP PHANTOM READ ---`, "info");
-      }
+        if (addSqlLog) {
+          addSqlLog(`CLIENT A: SELECT * FROM Showtime WHERE MovieID = ${selectedSalesMovie.id} AND CinemaID = ${selectedSalesCinema.id} AND Date = '${selectedSalesDate}'; (Truy vấn lại lần 2)`, "query");
+        }
 
-      setPhantomActive(false);
+        const read1 = result.read1 || [];
+        const read2 = result.read2 || [];
+
+        const read1Ids = new Set(read1.map((s: any) => s.id));
+        const phantomList = read2.filter((s: any) => !read1Ids.has(s.id));
+
+        if (phantomList.length > 0) {
+          // PHANTOM DETECTED - show the ghost rows but do NOT refresh list from DB
+          const phantomShowtimesMapped = phantomList.map((s: any) => ({
+            id: s.id,
+            movieId: s.movieId,
+            cinemaId: s.cinemaId,
+            date: s.date,
+            time: s.time,
+            hall: `${s.hall} (PHANTOM)`,
+            type: s.type,
+            availableSeats: s.availableSeats,
+            totalSeats: s.totalSeats
+          }));
+          setPhantomShowtimes(phantomShowtimesMapped);
+          setPhantomResult('error');
+
+          if (addSqlLog) {
+            phantomList.forEach((s: any) => {
+              addSqlLog(`CLIENT A: Phát hiện bản ghi bóng ma mới: Suất chiếu ${s.time} tại phòng ${s.hall}.`, "error");
+            });
+            addSqlLog(`[LỖI] PHANTOM READ XẢY RA: Bản ghi mới xuất hiện trong cùng một giao dịch đọc!`, "error");
+          }
+        } else {
+          // SUCCESS - Both reads were consistent. Admin B's insert was BLOCKED during our transaction.
+          // Do NOT refresh UI - keep the frozen list as proof that no phantom appeared during the transaction.
+          // The new showtime will appear only when user navigates away (normal behavior after A commits).
+          setPhantomShowtimes([]);
+          setPhantomResult('success');
+
+          if (addSqlLog) {
+            addSqlLog(`CLIENT A: Kết quả nhất quán giữa 2 lần đọc. Danh sách không thay đổi trong giao dịch.`, "success");
+            if (useLockFix) {
+              addSqlLog(`CLIENT B: [RESUMED] A đã COMMIT. Range Lock được giải phóng. CLIENT B giờ được phép INSERT.`, "success");
+              addSqlLog(`LƯU Ý: Suất chiếu của B sẽ xuất hiện ở lần tra cứu TIẾP THEO (không phải trong giao dịch này).`, "info");
+            }
+            addSqlLog(`[THÀNH CÔNG] ĐÃ TRÁNH ĐƯỢC PHANTOM READ nhờ 2PL + SERIALIZABLE.`, "success");
+          }
+          // NOTE: No syncWithBackend/refreshDB here intentionally.
+          // The frozen list IS the demo proof. If we refreshed now, the newly inserted showtime
+          // would appear and confuse the user into thinking the fix failed.
+        }
+
+        if (addSqlLog) {
+          addSqlLog(`CLIENT A: COMMIT TRANSACTION A;`, "success");
+          addSqlLog(`--- KẾT THÚC GIẢ LẬP PHANTOM READ ---`, "info");
+        }
+      } catch (err: any) {
+        if (addSqlLog) {
+          addSqlLog(`CLIENT A: Lỗi giao dịch: ${err.message}`, "error");
+        }
+        alert(`Lỗi giao dịch Phantom: ${err.message}`);
+      } finally {
+        setPhantomActive(false);
+      }
     };
 
     runPhantomSimulation();
@@ -402,8 +426,9 @@ export default function AdminPortalPage({
         const online = await checkBackendOnline();
         if (online) {
           // Only auto-sync if we are NOT in the middle of a non-repeatable read or phantom read simulation
-          // to avoid interfering with the simulated latency/rollback sequence
-          if (!nonRepResults.isActive && !phantomActive) {
+          // to avoid interfering with the simulated latency/rollback sequence.
+          // Also skip when phantomResult is showing — we want the frozen list to stay as demo proof.
+          if (!nonRepResults.isActive && !phantomActive && phantomResult === 'none') {
             await syncWithBackend();
             refreshDB();
             
@@ -432,7 +457,7 @@ export default function AdminPortalPage({
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [reportStartDate, reportEndDate, reportType, hasSearchedReport, nonRepResults.isActive, phantomActive]);
+  }, [reportStartDate, reportEndDate, reportType, hasSearchedReport, nonRepResults.isActive, phantomActive, phantomResult]);
 
   const refreshDB = () => {
     setMoviesList(loadMovies());
@@ -788,16 +813,28 @@ export default function AdminPortalPage({
     setShowShowtimeModal(true);
   };
 
-  const handleDeleteShowtime = (id: number) => {
+  const handleDeleteShowtime = async (id: number) => {
     if (confirm("Bạn có chắc chắn muốn xóa lịch chiếu này không?")) {
-      const updated = showtimesList.filter(s => s.id !== id);
-      saveShowtimes(updated);
-      refreshDB();
+      try {
+        const online = await checkBackendOnline();
+        if (online) {
+          await deleteShowtimeAPI(id);
+          await syncWithBackend();
+        } else {
+          const updated = showtimesList.filter(s => s.id !== id);
+          saveShowtimes(updated);
+        }
+        refreshDB();
+      } catch (err: any) {
+        alert(`Lỗi khi xóa suất chiếu trên SQL Server: ${err.message}`);
+      }
     }
   };
 
-  const handleSaveShowtime = (e: React.FormEvent) => {
+  const handleSaveShowtime = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingShowtime) return;
+
     const parseTimeToMinutes = (timeStr: string): number => {
       const [h, m] = timeStr.split(":").map(Number);
       return h * 60 + m;
@@ -834,12 +871,40 @@ export default function AdminPortalPage({
       return;
     }
 
-    const newId = showtimesList.length > 0 ? Math.max(1000, ...showtimesList.map(s => s.id)) + 1 : 1000;
-    newShowtime.id = newId;
+    setIsSavingShowtime(true);
 
-    saveShowtimes([...showtimesList, newShowtime]);
-    setShowShowtimeModal(false);
-    refreshDB();
+    if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === 'phantom' && addSqlLog) {
+      addSqlLog(`CLIENT B: BEGIN TRANSACTION B;`, "query");
+      addSqlLog(`CLIENT B: INSERT INTO Showtime (MovieID, CinemaID, Date, Time, Hall, Type) VALUES (${newShowtime.movieId}, ${newShowtime.cinemaId}, '${newShowtime.date}', '${newShowtime.time}', '${newShowtime.hall}', '${newShowtime.type}');`, "query");
+    }
+
+    try {
+      const online = await checkBackendOnline();
+      if (online) {
+        await createShowtimeAPI(newShowtime);
+        await syncWithBackend();
+      } else {
+        const newId = showtimesList.length > 0 ? Math.max(1000, ...showtimesList.map(s => s.id)) + 1 : 1000;
+        newShowtime.id = newId;
+        saveShowtimes([...showtimesList, newShowtime]);
+      }
+
+      if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === 'phantom' && addSqlLog) {
+        addSqlLog(`CLIENT B: COMMIT TRANSACTION B;`, "success");
+        addSqlLog(`CLIENT B: Thêm suất chiếu thành công! (Giao dịch hoàn tất)`, "success");
+      }
+
+      setShowShowtimeModal(false);
+      refreshDB();
+    } catch (err: any) {
+      if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === 'phantom' && addSqlLog) {
+        addSqlLog(`CLIENT B: ROLLBACK TRANSACTION B;`, "error");
+        addSqlLog(`CLIENT B: Lỗi: ${err.message}`, "error");
+      }
+      alert(`Lỗi khi tạo suất chiếu: ${err.message}`);
+    } finally {
+      setIsSavingShowtime(false);
+    }
   };
 
   // Ticket scanner / check-in actions
@@ -1672,41 +1737,62 @@ export default function AdminPortalPage({
                             );
                           }
 
-                          if (showtimes.length === 0) {
-                            return (
-                              <p className="text-gray-550 text-sm italic py-2">Không tìm thấy suất chiếu nào phù hợp.</p>
-                            );
-                          }
                           return (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                              {showtimes.map(st => (
-                                <button
-                                  key={st.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedSalesShowtime(st);
-                                    setSalesSelectedSeats([]);
-                                  }}
-                                  className={`p-3 rounded-xl border text-left transition-all ${selectedSalesShowtime?.id === st.id
-                                    ? "bg-red-600/10 border-red-500 shadow-md shadow-red-500/5"
-                                    : "bg-zinc-950 border-zinc-800 hover:border-zinc-700"
-                                    }`}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-white font-bold text-base">{st.time}</span>
-                                    {st.id === 999 ? (
-                                      <span className="text-[9px] bg-red-650/20 text-red-400 border border-red-500/35 px-1.5 py-0.5 rounded font-black uppercase tracking-wider animate-pulse">PHANTOM!</span>
-                                    ) : (
-                                      <span className="text-[10px] bg-zinc-850 px-1.5 py-0.5 rounded text-gray-450 border border-zinc-750 font-bold uppercase">{st.type}</span>
-                                    )}
-                                  </div>
-                                  <div className="flex justify-between items-center mt-2 text-[10px] text-gray-500 font-medium">
-                                    <span>{st.hall}</span>
-                                    <span>Trống: {st.availableSeats} ghế</span>
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
+                            <>
+                              {/* Result Banner */}
+                              {phantomResult === 'error' && (
+                                <div className="mb-3 p-3 rounded-xl bg-red-900/25 border border-red-500/40 text-red-300 text-xs font-medium">
+                                  <span className="font-black text-red-400 mr-1">⚠ PHANTOM READ XẢY RA!</span>
+                                  Suất chiếu bên dưới có nhãn <span className="font-black text-red-400">PHANTOM!</span> là bản ghi bóng ma xuất hiện trong cùng một giao dịch đọc (READ).
+                                </div>
+                              )}
+                              {phantomResult === 'success' && (
+                                <div className="mb-3 p-3 rounded-xl bg-green-900/25 border border-green-500/40 text-green-300 text-xs font-medium">
+                                  <span className="font-black text-green-400 mr-1">✓ PHANTOM READ ĐÃ ĐƯỢC NGĂN CHẶN!</span>
+                                  Giao thức <span className="font-black text-green-300">2PL (Strict Two-Phase Locking)</span> + mức cô lập <span className="font-black text-green-300">SERIALIZABLE</span> đã áp <span className="font-black text-green-300">Range Lock</span> lên tập bản ghi — chặn mọi INSERT từ giao dịch khác cho đến khi A commit. Hai lần đọc của A nhất quán hoàn toàn.
+                                </div>
+                              )}
+
+                              {/* Showtimes grid */}
+                              {showtimes.length === 0 ? (
+                                <p className="text-gray-550 text-sm italic py-2">Không tìm thấy suất chiếu nào phù hợp.</p>
+                              ) : (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              {showtimes.map(st => {
+                                    const isPhantom = phantomShowtimes.some(p => p.id === st.id);
+                                    return (
+                                      <button
+                                        key={st.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedSalesShowtime(st);
+                                          setSalesSelectedSeats([]);
+                                        }}
+                                        className={`p-3 rounded-xl border text-left transition-all ${selectedSalesShowtime?.id === st.id
+                                          ? "bg-red-600/10 border-red-500 shadow-md shadow-red-500/5"
+                                          : isPhantom
+                                            ? "bg-red-950/30 border-red-500/50 hover:border-red-400"
+                                            : "bg-zinc-950 border-zinc-800 hover:border-zinc-700"
+                                          }`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-white font-bold text-base">{st.time}</span>
+                                          {isPhantom ? (
+                                            <span className="text-[9px] bg-red-650/20 text-red-400 border border-red-500/35 px-1.5 py-0.5 rounded font-black uppercase tracking-wider animate-pulse">PHANTOM!</span>
+                                          ) : (
+                                            <span className="text-[10px] bg-zinc-850 px-1.5 py-0.5 rounded text-gray-450 border border-zinc-750 font-bold uppercase">{st.type}</span>
+                                          )}
+                                        </div>
+                                        <div className="flex justify-between items-center mt-2 text-[10px] text-gray-500 font-medium">
+                                          <span>{st.hall.replace(" (PHANTOM)", "")}</span>
+                                          <span>Trống: {st.availableSeats} ghế</span>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </>
                           );
                         })()}
                       </div>
@@ -2474,13 +2560,34 @@ export default function AdminPortalPage({
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-400 mb-1">Giờ Chiếu</label>
-                  <input
-                    type="time" required
-                    value={showtimeForm.time}
-                    onChange={e => setShowtimeForm({ ...showtimeForm, time: e.target.value })}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white"
-                  />
+                  <label className="block text-gray-400 mb-1">Giờ Chiếu <span className="text-xs text-zinc-500">(định dạng 24 giờ)</span></label>
+                  <div className="flex gap-2 items-center">
+                    <select
+                      value={showtimeForm.time ? showtimeForm.time.split(":")[0] : "09"}
+                      onChange={e => {
+                        const currentMin = showtimeForm.time ? showtimeForm.time.split(":")[1] : "00";
+                        setShowtimeForm({ ...showtimeForm, time: `${e.target.value}:${currentMin}` });
+                      }}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-center font-mono text-base"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map(h => (
+                        <option key={h} value={h}>{h} giờ</option>
+                      ))}
+                    </select>
+                    <span className="text-zinc-400 font-bold text-lg">:</span>
+                    <select
+                      value={showtimeForm.time ? showtimeForm.time.split(":")[1] : "00"}
+                      onChange={e => {
+                        const currentHour = showtimeForm.time ? showtimeForm.time.split(":")[0] : "09";
+                        setShowtimeForm({ ...showtimeForm, time: `${currentHour}:${e.target.value}` });
+                      }}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-center font-mono text-base"
+                    >
+                      {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map(m => (
+                        <option key={m} value={m}>{m} phút</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -2523,15 +2630,28 @@ export default function AdminPortalPage({
                 <button
                   type="button"
                   onClick={() => setShowShowtimeModal(false)}
-                  className="px-4 py-2 bg-zinc-850 hover:bg-zinc-800 text-white rounded-lg transition-colors"
+                  disabled={isSavingShowtime}
+                  className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                    isSavingShowtime ? "bg-zinc-900 text-gray-500 cursor-not-allowed" : "bg-zinc-850 hover:bg-zinc-800"
+                  }`}
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-lg transition-colors"
+                  disabled={isSavingShowtime}
+                  className={`px-6 py-2 text-white font-semibold rounded-lg transition-colors flex items-center gap-2 ${
+                    isSavingShowtime ? "bg-red-800/55 text-zinc-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-500"
+                  }`}
                 >
-                  Lưu
+                  {isSavingShowtime ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Đang xử lý (SQL Server)...
+                    </>
+                  ) : (
+                    "Lưu"
+                  )}
                 </button>
               </div>
             </form>

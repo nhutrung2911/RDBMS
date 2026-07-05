@@ -63,8 +63,8 @@ const SCENARIO_DESCRIPTIONS: Record<string, { desc: string; trigger: string; fix
   },
   phantom: {
     desc: "Khách hàng A tìm kiếm các suất chiếu khả dụng của phim. Trong lúc tìm kiếm, Admin chèn thêm một suất chiếu mới. Khách hàng A tìm kiếm lại trong cùng transaction và thấy xuất hiện thêm suất chiếu mới (bóng ma).",
-    trigger: "Vào xem chi tiết phim và bấm 'Tra cứu suất chiếu'. Trong lúc chờ, hệ thống tự động chèn thêm suất chiếu mới chạy ngầm.",
-    fixDesc: "Khi chọn mức cô lập 'SERIALIZABLE': Database khóa cả phạm vi dữ liệu (Range Lock), chặn hành động insert suất chiếu mới của Admin cho đến khi Transaction tìm kiếm hoàn tất."
+    trigger: "Vào tab 'Bán Vé Tại Quầy', chọn phim/rạp/ngày để kích hoạt tra cứu suất chiếu. Trong lúc đang đọc (10s), Admin bên phải thêm suất chiếu mới. Quan sát kết quả 2 lần đọc.",
+    fixDesc: "Giải pháp: Giao thức 2PL (Strict Two-Phase Locking) với mức cô lập SERIALIZABLE. 2PL áp dụng Khóa phạm vi (Range Lock/Key-Range Lock) lên tập bản ghi kết quả — ngăn mọi INSERT vào vùng đó cho đến khi giao dịch A kết thúc (commit). Range Lock là loại khóa đặc biệt trong 2PL dùng để ngăn Phantom Read."
   },
   deadlock: {
     desc: "Nhân viên A đặt vé combo ghế {A1, A2} (khóa A1 rồi khóa A2). Nhân viên B đặt vé combo {A2, A1} (khóa A2 rồi khóa A1). Cả hai khóa chéo nhau tạo thành Deadlock. SQL Server sẽ tự động hủy một trong hai giao dịch.",
@@ -93,6 +93,12 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
       else if (value === "phantom") newConfig.isolationLevel = "REPEATABLE_READ";
       else if (value === "lost_update" || value === "deadlock") newConfig.isolationLevel = "READ_COMMITTED";
     }
+    
+    // Auto adjust isolation level when toggling fix for dirty read
+    if (key === "useLockFix" && config.scenario === "dirty_read") {
+      newConfig.isolationLevel = value ? "READ_COMMITTED" : "READ_UNCOMMITTED";
+    }
+    
     onChangeConfig(newConfig);
   };
 
@@ -134,17 +140,15 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
             <div className="flex items-center gap-1.5 bg-zinc-800 rounded-lg p-0.5 border border-zinc-700">
               <button
                 onClick={() => setActiveTab("settings")}
-                className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
-                  activeTab === "settings" ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"
-                }`}
+                className={`px-3 py-1 rounded text-xs font-semibold transition-all ${activeTab === "settings" ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"
+                  }`}
               >
                 Cấu Hình
               </button>
               <button
                 onClick={() => setActiveTab("logs")}
-                className={`px-3 py-1 rounded text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                  activeTab === "logs" ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"
-                }`}
+                className={`px-3 py-1 rounded text-xs font-semibold transition-all flex items-center gap-1.5 ${activeTab === "logs" ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"
+                  }`}
               >
                 Nhật ký SQL
                 {logs.length > 0 && (
@@ -156,7 +160,7 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
 
           {/* Body */}
           <div className="p-5 max-h-[420px] overflow-y-auto space-y-4">
-            
+
             {/* SETTINGS TAB */}
             {activeTab === "settings" && (
               <div className="space-y-4 text-xs">
@@ -253,7 +257,7 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                     </div>
 
                     {/* Apply Lock Fix switch (For Lost Update, Deadlock, and Manual/None scenario) */}
-                    {(config.scenario === "none" || config.scenario === "lost_update" || config.scenario === "deadlock" || config.scenario === "non_repeatable_read" || config.scenario === "phantom") && (
+                    {(config.scenario === "none" || config.scenario === "lost_update" || config.scenario === "deadlock" || config.scenario === "non_repeatable_read" || config.scenario === "phantom" || config.scenario === "dirty_read") && (
                       <div className="flex items-center justify-between bg-zinc-900/60 p-3 rounded-xl border border-zinc-800">
                         <div className="flex gap-2">
                           {config.useLockFix ? (
@@ -265,13 +269,14 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                             <h4 className="text-white font-bold flex items-center gap-1.5">
                               {config.useLockFix ? "Đã áp dụng cách khắc phục" : "Chưa khắc phục lỗi (Sử dụng SP cũ)"}
                             </h4>
-                             <p className="text-[10px] text-gray-500 mt-0.5">
-                               {config.scenario === "lost_update" ? "Dùng SP có UPDLOCK, HOLDLOCK" : 
-                                config.scenario === "deadlock" ? "Sắp xếp tăng dần ID ghế trước khi khóa" : 
-                                config.scenario === "non_repeatable_read" ? "Giao thức Nhãn thời gian cơ bản (TO)" : 
-                                config.scenario === "phantom" ? "Giao thức Khóa 2 giai đoạn (2PL / Serializable)" : 
-                                "Kích hoạt UPDLOCK, HOLDLOCK và Sắp xếp tự động"}
-                             </p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">
+                              {config.scenario === "lost_update" ? "Dùng SP có UPDLOCK, HOLDLOCK" :
+                                config.scenario === "deadlock" ? "Sắp xếp tăng dần ID ghế trước khi khóa" :
+                                  config.scenario === "non_repeatable_read" ? "Giao thức Nhãn thời gian cơ bản (TO)" :
+                                    config.scenario === "phantom" ? "Giao thức Khóa 2 giai đoạn (2PL / Serializable)" :
+                                      config.scenario === "dirty_read" ? "Nâng mức cô lập lên READ COMMITTED" :
+                                        "Kích hoạt UPDLOCK, HOLDLOCK và Sắp xếp tự động"}
+                            </p>
                           </div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
@@ -341,7 +346,7 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                 </div>
               </div>
             )}
-            
+
           </div>
         </div>
       )}

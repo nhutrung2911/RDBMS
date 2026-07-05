@@ -60,6 +60,7 @@ export default function App() {
     latencyMs: 10000
   });
   const [sqlLogs, setSqlLogs] = useState<SqlLog[]>([]);
+  const [customBookingCode, setCustomBookingCode] = useState<string>("");
 
   const addSqlLog = (message: string, type: SqlLog["type"] = "info") => {
     const timestamp = new Date().toLocaleTimeString("vi-VN", { hour12: false });
@@ -182,11 +183,13 @@ export default function App() {
   const handleConfirmSeats = (
     seats: string[], 
     total: number, 
-    combos: { name: string; quantity: number; price: number }[]
+    combos: { name: string; quantity: number; price: number }[],
+    code?: string
   ) => {
     setBookedSeats(seats);
     setBookingTotal(total);
     setBookedCombos(combos);
+    setCustomBookingCode(code || "");
     setPage("booking_confirm");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -320,6 +323,7 @@ export default function App() {
             }}
             concurrencyConfig={concurrencyConfig}
             addSqlLog={addSqlLog}
+            bookingCode={customBookingCode}
           />
         )}
       </main>

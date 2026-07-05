@@ -915,8 +915,8 @@ BEGIN
 END;
 GO
 
--- [SỬA LỖI] Đặt combo ghế phòng chống Deadlock (Sắp xếp thống nhất thứ tự khóa - Luôn khóa ghế có ID nhỏ trước)
--- [SỬA LỖI] Đặt combo ghế phòng chống Deadlock bằng giao thức Wait-Die (Độ ưu tiên giao dịch)
+-- [SỬA LỖI] Đặt combo ghế phòng chống Deadlock bằng giao thức Wait-Die
+-- (Nếu giao dịch già hơn, cho phép Wait. Nếu giao dịch trẻ hơn, ép buộc Die bằng cách set Lock Timeout = 0)
 CREATE PROCEDURE usp_BookComboSeats_Deadlock_Fixed
     @TicketId VARCHAR(50), @CustomerId INT, @ShowtimeId INT, @Seat1 VARCHAR(10), @Seat2 VARCHAR(10), @TotalPrice DECIMAL(18,2), @LatencyMs INT = 0, @DeadlockPriority NVARCHAR(20) = N'NORMAL'
 AS
@@ -924,13 +924,15 @@ BEGIN
     SET NOCOUNT ON;
     SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     
-    -- Áp dụng độ ưu tiên tương tranh (Wait-Die)
+    -- Áp dụng giao thức Wait-Die (Mô phỏng qua Lock Timeout)
+    -- Giả sử @DeadlockPriority = 'HIGH' là giao dịch ĐẾN TRƯỚC (Già hơn)
+    -- Giả sử @DeadlockPriority = 'LOW' là giao dịch ĐẾN SAU (Trẻ hơn)
     IF @DeadlockPriority = N'HIGH'
-        SET DEADLOCK_PRIORITY HIGH;
+        SET LOCK_TIMEOUT -1; -- Già hơn -> Wait (Chờ vô hạn)
     ELSE IF @DeadlockPriority = N'LOW'
-        SET DEADLOCK_PRIORITY LOW;
+        SET LOCK_TIMEOUT 0;  -- Trẻ hơn -> Die (Chết/Hủy ngay lập tức nếu có tranh chấp)
     ELSE
-        SET DEADLOCK_PRIORITY NORMAL;
+        SET LOCK_TIMEOUT -1;
 
     BEGIN TRANSACTION;
     BEGIN TRY

@@ -19,6 +19,7 @@ interface BookingConfirmPageProps {
   onBack: () => void;
   concurrencyConfig?: any;
   addSqlLog?: (message: string, type?: 'info' | 'query' | 'lock' | 'success' | 'error') => void;
+  bookingCode?: string;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -302,16 +303,17 @@ function InfoItem({ icon, label, value, subValue }: { icon: React.ReactNode; lab
   );
 }
 
-export default function BookingConfirmPage({ 
-  movie, showtime, selectedSeats, selectedCombos = [], total, userEmail, onHome, onBack,
-  concurrencyConfig, addSqlLog 
-}: BookingConfirmPageProps) {
+export default function BookingConfirmPage(props: BookingConfirmPageProps) {
+  const { 
+    movie, showtime, selectedSeats, selectedCombos = [], total, userEmail, onHome, onBack,
+    concurrencyConfig, addSqlLog, bookingCode: propBookingCode
+  } = props;
   const [step, setStep] = useState<"payment" | "qr_payment" | "success">("payment");
   const [selectedMethod, setSelectedMethod] = useState("momo");
   const [processing, setProcessing] = useState(false);
   const [showOrderSummary, setShowOrderSummary] = useState(true);
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
-  const [bookingCode] = useState(() => "CNS" + Math.random().toString(36).substring(2, 8).toUpperCase());
+  const [bookingCode] = useState(() => propBookingCode || "CNS" + Math.random().toString(36).substring(2, 8).toUpperCase());
   const isSubmittingRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
