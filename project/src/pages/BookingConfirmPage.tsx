@@ -414,11 +414,22 @@ export default function BookingConfirmPage({
     abortControllerRef.current = controller;
 
     if (concurrencyConfig?.devModeEnabled && addSqlLog) {
-      addSqlLog(`CLIENT A: Người dùng hoàn tất thanh toán. Bắt đầu giao dịch.`, "info");
-      addSqlLog(`CLIENT A: BEGIN TRANSACTION (TX_${bookingCode});`, "query");
-      addSqlLog(`CLIENT A: INSERT INTO Ticket ...`, "query");
-      addSqlLog(`CLIENT A: INSERT INTO TicketDetail ... (Ghế ${selectedSeats.join(', ')});`, "query");
-      addSqlLog(`CLIENT A: Đang giữ các khóa và treo chờ (WAITFOR DELAY ${concurrencyConfig?.latencyMs ?? 10000}ms)`, "lock");
+      if (concurrencyConfig.scenario === "lost_update") {
+        addSqlLog(`--- KHỞI ĐẦU GIẢ LẬP LOST UPDATE ---`, "info");
+        addSqlLog(`CLIENT A: SET TRANSACTION ISOLATION LEVEL READ COMMITTED;`, "query");
+        addSqlLog(`CLIENT A: BEGIN TRANSACTION A (TX_${bookingCode});`, "query");
+        if (concurrencyConfig.useLockFix) {
+          addSqlLog(`CLIENT A: SELECT SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatNumber = '${selectedSeats.join(', ')}';`, "lock");
+        } else {
+          addSqlLog(`CLIENT A: SELECT SeatId FROM Seat WHERE SeatNumber = '${selectedSeats.join(', ')}';`, "query");
+        }
+      } else {
+        addSqlLog(`CLIENT A: Người dùng hoàn tất thanh toán. Bắt đầu giao dịch.`, "info");
+        addSqlLog(`CLIENT A: BEGIN TRANSACTION (TX_${bookingCode});`, "query");
+        addSqlLog(`CLIENT A: INSERT INTO Ticket ...`, "query");
+        addSqlLog(`CLIENT A: INSERT INTO TicketDetail ... (Ghế ${selectedSeats.join(', ')});`, "query");
+        addSqlLog(`CLIENT A: Đang giữ các khóa và treo chờ (WAITFOR DELAY ${concurrencyConfig?.latencyMs ?? 10000}ms)`, "lock");
+      }
     }
     
     // Create new ticket to save
@@ -449,6 +460,53 @@ export default function BookingConfirmPage({
     try {
       const online = await checkBackendOnline();
       if (online) {
+        if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.scenario === "lost_update") {
+          const txBId = "TX_B_" + Math.random().toString(36).substring(2, 6).toUpperCase();
+          setTimeout(() => {
+            if (addSqlLog) {
+              addSqlLog(`CLIENT B: BEGIN TRANSACTION B (${txBId});`, "query");
+              if (concurrencyConfig.useLockFix) {
+                addSqlLog(`CLIENT B: SELECT SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK) WHERE SeatNumber = '${selectedSeats.join(', ')}';`, "lock");
+                addSqlLog(`CLIENT B: [BLOCKED] Đang đợi giải phóng khóa UPDLOCK trên dòng ghế '${selectedSeats.join(', ')}'...`, "lock");
+              } else {
+                addSqlLog(`CLIENT B: SELECT SeatId FROM Seat WHERE SeatNumber = '${selectedSeats.join(', ')}';`, "query");
+                addSqlLog(`CLIENT B: Ghế '${selectedSeats.join(', ')}' đang trống. CLIENT B chuẩn bị đặt đè.`, "info");
+              }
+            }
+
+            bookTicketAPI({
+              showtimeId: showtime.id,
+              seats: selectedSeats,
+              movieTitle: movie.titleVi || movie.title,
+              moviePoster: movie.poster,
+              cinemaName: cinema?.name || "CineStar Cinema",
+              showtimeDate: showtime.date,
+              showtimeTime: showtime.time,
+              totalPrice: total,
+              paymentMethod: "Ví điện tử ZaloPay",
+              userEmail: "khachB@gmail.com",
+              isolationLevel: concurrencyConfig.isolationLevel || "READ COMMITTED",
+              useLockFix: concurrencyConfig.useLockFix || false,
+              latencyMs: 0
+            }).then(res => {
+              if (addSqlLog) {
+                addSqlLog(`CLIENT B: UPDATE Seat SET SeatStatus = 'SOLD' WHERE SeatNumber = '${selectedSeats.join(', ')}';`, "query");
+                addSqlLog(`CLIENT B: COMMIT TRANSACTION B;`, "success");
+                addSqlLog(`CLIENT B: Đặt ghế '${selectedSeats.join(', ')}' thành công! (Ghi đè A nếu không sửa lỗi)`, "success");
+              }
+              return res;
+            }).catch(err => {
+              if (addSqlLog) {
+                addSqlLog(`CLIENT B: [RESUMED] Khóa được giải phóng. Đọc lại SeatStatus...`, "lock");
+                addSqlLog(`CLIENT B: Ghế '${selectedSeats.join(', ')}' đã có trạng thái 'SOLD' (Giao dịch thất bại).`, "error");
+                addSqlLog(`CLIENT B: ROLLBACK TRANSACTION B;`, "error");
+                addSqlLog(`CLIENT B: Lỗi: ${err.message}`, "error");
+              }
+              throw err;
+            });
+          }, 400);
+        }
+
         await bookTicketAPI({
           showtimeId: showtime.id,
           seats: selectedSeats,
@@ -488,9 +546,16 @@ export default function BookingConfirmPage({
       }
 
       if (concurrencyConfig?.devModeEnabled && addSqlLog) {
-        addSqlLog(`CLIENT A: COMMIT TRANSACTION (TX_${bookingCode});`, "success");
-        addSqlLog(`CLIENT A: Vé đã được bán thành công. Giải phóng khóa tạm giữ.`, "success");
-        addSqlLog(`--- KẾT THÚC GIẢ LẬP DIRTY READ (COMMIT) ---`, "success");
+        if (concurrencyConfig.scenario === "lost_update") {
+          addSqlLog(`CLIENT A: UPDATE Seat SET SeatStatus = 'SOLD' WHERE SeatNumber = '${selectedSeats.join(', ')}';`, "query");
+          addSqlLog(`CLIENT A: COMMIT TRANSACTION A;`, "success");
+          addSqlLog(`CLIENT A: Đặt ghế '${selectedSeats.join(', ')}' thành công! Giải phóng khóa.`, "success");
+          addSqlLog(`--- KẾT THÚC GIẢ LẬP LOST UPDATE (COMMIT) ---`, "success");
+        } else {
+          addSqlLog(`CLIENT A: COMMIT TRANSACTION (TX_${bookingCode});`, "success");
+          addSqlLog(`CLIENT A: Vé đã được bán thành công. Giải phóng khóa tạm giữ.`, "success");
+          addSqlLog(`--- KẾT THÚC GIẢ LẬP DIRTY READ (COMMIT) ---`, "success");
+        }
       }
 
       clearSeatLocksForTransaction(`TX_${bookingCode}`);
@@ -500,6 +565,12 @@ export default function BookingConfirmPage({
       if (err.name === 'AbortError') {
         console.log("Transaction request aborted by user.");
         return;
+      }
+      if (concurrencyConfig?.devModeEnabled && addSqlLog) {
+        if (concurrencyConfig.scenario === "lost_update") {
+          addSqlLog(`CLIENT A: Lỗi: ${err.message}`, "error");
+          addSqlLog(`--- KẾT THÚC GIẢ LẬP LOST UPDATE (ROLLBACK) ---`, "error");
+        }
       }
       isSubmittingRef.current = false;
       setIsSubmitting(false);

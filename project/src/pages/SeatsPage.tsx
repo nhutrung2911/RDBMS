@@ -712,16 +712,28 @@ export default function SeatsPage({ movie, showtime, userEmail, onBack, onConfir
           </div>
 
           <button
-            onClick={() => {
+            onClick={async () => {
               if (selectedSeats.length === 0) return;
               
-              if (concurrencyConfig?.devModeEnabled) {
-                handleProceedWithSimulation();
-              } else {
-                // Normal flow without dev mode simulation
-                const combosList: { name: string; quantity: number; price: number }[] = [];
-                onConfirm(selectedSeats, totalPrice, combosList);
+              // 1. Sync locks and tickets from database
+              try {
+                await syncWithBackend();
+              } catch (e) {
+                console.error("Failed to sync with backend:", e);
               }
+
+              // 2. Check if useLockFix is active
+              if (concurrencyConfig?.devModeEnabled && concurrencyConfig?.useLockFix) {
+                const lockedSeat = selectedSeats.find(seat => isSeatLocked(showtime.id, seat));
+                if (lockedSeat) {
+                  alert(`XUNG ĐỘT TƯƠNG TRANH! Ghế ${lockedSeat} đang trong tiến trình thanh toán hoặc đã được đặt bởi khách hàng khác!`);
+                  return;
+                }
+              }
+
+              // Normal flow: proceed to Payment QR page
+              const combosList: { name: string; quantity: number; price: number }[] = [];
+              onConfirm(selectedSeats, totalPrice, combosList);
             }}
             disabled={selectedSeats.length === 0}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${
