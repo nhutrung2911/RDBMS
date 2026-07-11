@@ -127,14 +127,14 @@ INSERT INTO Category (CategoryName) VALUES
 (N'Giật gân (Thriller)'), (N'Tâm lý (Drama)'), (N'Siêu anh hùng (Superhero)');
 
 INSERT INTO Movie (Title, Duration, CategoryId, ReleaseDate, Status) VALUES
-(N'Xứ Cát: Phần Hai (Dune: Part Two)', 166, 2, '2026-06-05', 'now_showing'),
-(N'Godzilla x Kong: Đế Chế Mới', 115, 1, '2026-06-10', 'now_showing'),
-(N'Kung Fu Panda 4', 94, 4, '2026-06-07', 'now_showing'),
-(N'Nội Chiến (Civil War)', 109, 8, '2026-06-12', 'now_showing'),
-(N'Người Đóng Thế (The Fall Guy)', 126, 5, '2026-06-14', 'now_showing'),
-(N'Những Mảnh Ghép Cảm Xúc 2 (Inside Out 2)', 100, 4, '2026-06-18', 'coming_soon'),
-(N'Deadpool & Wolverine', 127, 9, '2026-06-29', 'coming_soon'),
-(N'Alien: Romulus', 119, 6, '2026-07-15', 'coming_soon');
+(N'Xứ Cát: Phần Hai (Dune: Part Two)', 166, 2, '2026-07-11', 'now_showing'),
+(N'Godzilla x Kong: Đế Chế Mới', 115, 1, '2026-07-12', 'now_showing'),
+(N'Kung Fu Panda 4', 94, 4, '2026-07-13', 'now_showing'),
+(N'Nội Chiến (Civil War)', 109, 8, '2026-07-14', 'now_showing'),
+(N'Người Đóng Thế (The Fall Guy)', 126, 5, '2026-07-15', 'now_showing'),
+(N'Những Mảnh Ghép Cảm Xúc 2 (Inside Out 2)', 100, 4, '2026-07-16', 'coming_soon'),
+(N'Deadpool & Wolverine', 127, 9, '2026-07-17', 'coming_soon'),
+(N'Alien: Romulus', 119, 6, '2026-07-18', 'coming_soon');
 
 INSERT INTO Cinema (CinemaName, Address, City) VALUES
 (N'CGV Vincom Center', N'72 Lê Thánh Tôn, Q.1', N'TP. Hồ Chí Minh'),
@@ -193,9 +193,9 @@ DEALLOCATE RoomCursor;
 GO
 
 INSERT INTO Showtime (MovieId, RoomId, StartTime, EndTime, Price) VALUES
-(1, 1, '2026-06-15 09:30:00', '2026-06-15 12:16:00', 130000.00),
-(1, 2, '2026-06-15 12:15:00', '2026-06-15 15:01:00', 90000.00),
-(1, 1, '2026-06-15 18:30:00', '2026-06-15 21:16:00', 130000.00);
+(1, 1, '2026-07-11 09:30:00', '2026-07-11 12:16:00', 130000.00),
+(1, 2, '2026-07-11 12:15:00', '2026-07-11 15:01:00', 90000.00),
+(1, 1, '2026-07-11 18:30:00', '2026-07-11 21:16:00', 130000.00);
 
 INSERT INTO Customer (FullName, Phone, Email) VALUES
 (N'Như Trung', '0901234567', 'nguyennhutrung788@gmail.com'),
@@ -207,7 +207,7 @@ GO
 IF NOT EXISTS (SELECT 1 FROM Ticket WHERE TicketId = 'CNS_REVENUE_DEL')
 BEGIN
     INSERT INTO Ticket (TicketId, CustomerId, BookingTime, TotalPrice, PaymentMethod, UserEmail, Status) VALUES
-    ('CNS_REVENUE_DEL', 1, '2026-06-15 10:00:00', 1200000.00, N'Tiền mặt', 'nguyennhutrung788@gmail.com', N'valid');
+    ('CNS_REVENUE_DEL', 1, '2026-07-11 10:00:00', 1200000.00, N'Tiền mặt', 'nguyennhutrung788@gmail.com', N'valid');
 
     INSERT INTO TicketDetail (TicketId, ShowtimeId, SeatId, Price) VALUES
     ('CNS_REVENUE_DEL', 1, 1, 1200000.00);

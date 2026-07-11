@@ -19,14 +19,14 @@ GO
 
 -- 2. Thêm Danh sách phim mẫu
 INSERT INTO Movie (Title, Duration, CategoryId, ReleaseDate, Status) VALUES
-(N'Xứ Cát: Phần Hai (Dune: Part Two)', 166, 2, '2026-06-05', 'now_showing'),
-(N'Godzilla x Kong: Đế Chế Mới', 115, 1, '2026-06-10', 'now_showing'),
-(N'Kung Fu Panda 4', 94, 4, '2026-06-07', 'now_showing'),
-(N'Nội Chiến (Civil War)', 109, 8, '2026-06-12', 'now_showing'),
-(N'Người Đóng Thế (The Fall Guy)', 126, 5, '2026-06-14', 'now_showing'),
-(N'Những Mảnh Ghép Cảm Xúc 2 (Inside Out 2)', 100, 4, '2026-06-18', 'coming_soon'),
-(N'Deadpool & Wolverine', 127, 9, '2026-06-29', 'coming_soon'),
-(N'Alien: Romulus', 119, 6, '2026-07-15', 'coming_soon');
+(N'Xứ Cát: Phần Hai (Dune: Part Two)', 166, 2, '2026-07-11', 'now_showing'),
+(N'Godzilla x Kong: Đế Chế Mới', 115, 1, '2026-07-12', 'now_showing'),
+(N'Kung Fu Panda 4', 94, 4, '2026-07-13', 'now_showing'),
+(N'Nội Chiến (Civil War)', 109, 8, '2026-07-14', 'now_showing'),
+(N'Người Đóng Thế (The Fall Guy)', 126, 5, '2026-07-15', 'now_showing'),
+(N'Những Mảnh Ghép Cảm Xúc 2 (Inside Out 2)', 100, 4, '2026-07-16', 'coming_soon'),
+(N'Deadpool & Wolverine', 127, 9, '2026-07-17', 'coming_soon'),
+(N'Alien: Romulus', 119, 6, '2026-07-18', 'coming_soon');
 GO
 
 -- 3. Thêm Danh sách Rạp phim
