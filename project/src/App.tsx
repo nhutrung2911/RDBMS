@@ -344,13 +344,19 @@ export default function App() {
 function MyTicketsPage({ userEmail, onHome, onAuth }: { userEmail: string | null; onHome: () => void; onAuth: () => void }) {
   const [tickets, setTickets] = useState<BookedTicket[]>([]);
 
-  useEffect(() => {
+  const loadLocalTickets = () => {
     const allTickets = loadTickets();
     if (userEmail) {
       setTickets(allTickets.filter(t => t.userEmail === userEmail));
     } else {
       setTickets(allTickets.filter(t => t.userEmail === null)); // Guest tickets
     }
+  };
+
+  useEffect(() => {
+    loadLocalTickets();
+    window.addEventListener('db_synced', loadLocalTickets);
+    return () => window.removeEventListener('db_synced', loadLocalTickets);
   }, [userEmail]);
 
   const handleDelete = async (id: string) => {
@@ -438,7 +444,11 @@ function MyTicketsPage({ userEmail, onHome, onAuth }: { userEmail: string | null
                   </div>
                   <div>
                     <span className="text-gray-500 font-sans">Ghế ngồi:</span>
-                    <p className="text-red-400 font-bold mt-0.5">{t.seats.join(", ")}</p>
+                    {t.seats.length > 0 ? (
+                      <p className="text-red-400 font-bold mt-0.5">{t.seats.join(", ")}</p>
+                    ) : (
+                      <p className="text-red-500 font-bold mt-0.5 text-[10px] uppercase bg-red-500/10 inline-block px-1.5 py-0.5 rounded border border-red-500/20">Mất ghế (Lost Update)</p>
+                    )}
                   </div>
                 </div>
 

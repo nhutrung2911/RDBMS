@@ -509,6 +509,12 @@ export default function BookingConfirmPage(props: BookingConfirmPageProps) {
           }, 400);
         }
 
+        // Auto-detect Deadlock scenario if they select >= 2 seats and haven't chosen a scenario
+        let actualScenario = concurrencyConfig?.scenario || "none";
+        if (actualScenario === "none" && selectedSeats.length >= 2) {
+          actualScenario = "deadlock";
+        }
+
         await bookTicketAPI({
           showtimeId: showtime.id,
           seats: selectedSeats,
@@ -522,7 +528,8 @@ export default function BookingConfirmPage(props: BookingConfirmPageProps) {
           userEmail: userEmail || "khach@gmail.com",
           isolationLevel: concurrencyConfig?.isolationLevel || "READ COMMITTED",
           useLockFix: concurrencyConfig?.useLockFix || false,
-          latencyMs: concurrencyConfig?.latencyMs ?? 10000
+          latencyMs: concurrencyConfig?.latencyMs ?? 10000,
+          scenario: actualScenario
         }, controller.signal);
         
         await syncWithBackend();

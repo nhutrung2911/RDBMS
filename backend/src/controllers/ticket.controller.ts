@@ -112,19 +112,20 @@ export async function bookTicket(req: ConcurrencyRequest, res: Response, next: N
       useLockFix,
       latencyMs,
       isolationLevel,
-      userEmail,
-      movieTitle,
-      moviePoster,
-      cinemaName,
-      showtimeDate,
-      showtimeTime,
-      totalPrice,
-      paymentMethod,
-      combos,
-      clientAborted: () => isAborted
+      userEmail: req.body.userEmail || null,
+      movieTitle: req.body.movieTitle,
+      moviePoster: req.body.moviePoster,
+      cinemaName: req.body.cinemaName,
+      showtimeDate: req.body.showtimeDate,
+      showtimeTime: req.body.showtimeTime,
+      totalPrice: req.body.totalPrice,
+      paymentMethod: req.body.paymentMethod,
+      combos: req.body.combos,
+      clientAborted: () => isAborted,
+      scenario: req.scenario
     });
 
-    res.json({ success: true, ticket });
+    res.status(201).json({ success: true, ticket });
   } catch (error) {
     next(error);
   }

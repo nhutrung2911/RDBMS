@@ -6,6 +6,7 @@ export interface ConcurrencyRequest extends Request {
   isolationLevelName?: string;
   useLockFix?: boolean;
   latencyMs?: number;
+  scenario?: string;
 }
 
 export function concurrencyMiddleware(req: ConcurrencyRequest, res: Response, next: NextFunction) {
@@ -48,6 +49,10 @@ export function concurrencyMiddleware(req: ConcurrencyRequest, res: Response, ne
   // 3. Read latency (delay)
   const latencyHeader = req.headers["x-latency-ms"] || req.query.latencyMs || req.body?.latencyMs;
   req.latencyMs = latencyHeader ? Number(latencyHeader) : 0;
+
+  // 4. Read scenario
+  const scenarioHeader = req.headers["x-scenario"] || req.query.scenario || req.body?.scenario;
+  req.scenario = scenarioHeader ? String(scenarioHeader) : "none";
 
   next();
 }

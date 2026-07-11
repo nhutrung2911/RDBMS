@@ -190,19 +190,27 @@ export default function AdminPortalPage({
             addSqlLog(`[LỖI] PHANTOM READ XẢY RA: Bản ghi mới xuất hiện trong cùng một giao dịch đọc!`, "error");
           }
         } else {
-          // SUCCESS - Both reads were consistent. Admin B's insert was BLOCKED during our transaction.
-          // Do NOT refresh UI - keep the frozen list as proof that no phantom appeared during the transaction.
-          // The new showtime will appear only when user navigates away (normal behavior after A commits).
+          // No phantoms found
           setPhantomShowtimes([]);
-          setPhantomResult('success');
+          
+          if (useLockFix) {
+            // SUCCESS - Both reads were consistent. Admin B's insert was BLOCKED during our transaction.
+            setPhantomResult('success');
 
-          if (addSqlLog) {
-            addSqlLog(`CLIENT A: Kết quả nhất quán giữa 2 lần đọc. Danh sách không thay đổi trong giao dịch.`, "success");
-            if (useLockFix) {
+            if (addSqlLog) {
+              addSqlLog(`CLIENT A: Kết quả nhất quán giữa 2 lần đọc. Danh sách không thay đổi trong giao dịch.`, "success");
               addSqlLog(`CLIENT B: [RESUMED] A đã COMMIT. Range Lock được giải phóng. CLIENT B giờ được phép INSERT.`, "success");
               addSqlLog(`LƯU Ý: Suất chiếu của B sẽ xuất hiện ở lần tra cứu TIẾP THEO (không phải trong giao dịch này).`, "info");
+              addSqlLog(`[THÀNH CÔNG] ĐÃ TRÁNH ĐƯỢC PHANTOM READ nhờ 2PL + SERIALIZABLE.`, "success");
             }
-            addSqlLog(`[THÀNH CÔNG] ĐÃ TRÁNH ĐƯỢC PHANTOM READ nhờ 2PL + SERIALIZABLE.`, "success");
+          } else {
+            // FAILED TO PRODUCE PHANTOM - User probably made a typo or didn't insert in time
+            setPhantomResult('none');
+            alert("Không phát hiện suất chiếu bóng ma nào! Bạn hãy kiểm tra lại xem suất chiếu vừa tạo ở bên phải có CÙNG Phim, CÙNG Rạp, và CÙNG Ngày Chiếu với bên trái không nhé. (Lưu ý định dạng ngày tháng có thể bị ngược DD/MM và MM/DD)");
+            
+            if (addSqlLog) {
+              addSqlLog(`CLIENT A: Không phát hiện thay đổi dữ liệu nào. Có thể giao dịch B chưa chèn dữ liệu khớp với điều kiện tìm kiếm.`, "info");
+            }
           }
           // NOTE: No syncWithBackend/refreshDB here intentionally.
           // The frozen list IS the demo proof. If we refreshed now, the newly inserted showtime
@@ -855,7 +863,9 @@ export default function AdminPortalPage({
     const end = start + duration;
 
     const overlap = showtimesList.some(s => {
-      if (s.cinemaId === newShowtime.cinemaId && s.date === newShowtime.date && s.hall.toLowerCase() === newShowtime.hall.toLowerCase()) {
+      // Check if halls match (e.g., "Hall 1 (IMAX)" includes "Hall 1")
+      const hallMatch = s.hall.toLowerCase().includes(newShowtime.hall.toLowerCase());
+      if (s.cinemaId === newShowtime.cinemaId && s.date === newShowtime.date && hallMatch) {
         const existMovie = moviesList.find(m => m.id === s.movieId);
         const existDuration = existMovie ? existMovie.duration : 120;
         const existStart = parseTimeToMinutes(s.time);

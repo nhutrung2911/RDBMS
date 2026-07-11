@@ -172,7 +172,7 @@ export class TicketService {
     const roomRes = await pool.request()
       .input("cinemaId", sql.Int, st.cinemaId)
       .input("roomName", sql.VarChar, st.hall)
-      .query("SELECT RoomId FROM Room WHERE CinemaId = @cinemaId AND RoomName = @roomName");
+      .query("SELECT RoomId FROM Room WHERE CinemaId = @cinemaId AND RoomName LIKE '%' + @roomName + '%'");
     let roomId = roomRes.recordset[0]?.RoomId;
     if (!roomId) {
       const fallbackRoom = await pool.request()
@@ -293,11 +293,12 @@ export class TicketService {
     paymentMethod: string;
     combos?: any[];
     clientAborted?: () => boolean;
+    scenario?: string;
   }): Promise<BookedTicket> {
     const {
       showtimeId, seats, useLockFix, latencyMs, isolationLevel,
       userEmail, movieTitle, moviePoster, cinemaName, showtimeDate, showtimeTime, totalPrice, paymentMethod, combos,
-      clientAborted
+      clientAborted, scenario
     } = params;
 
     const transactionId = "TX_" + Math.random().toString(36).substring(2, 7).toUpperCase();
@@ -364,9 +365,14 @@ export class TicketService {
 
     try {
       // 1. READ PHASE: Check initial seat status
-      for (const seat of seats) {
-        // If useLockFix is true, acquire UPDLOCK, HOLDLOCK on the Seat row to block other transactions
-        if (useLockFix) {
+      let finalSeats = seats;
+      if (scenario === 'deadlock' && useLockFix) {
+        finalSeats = [...seats].sort();
+      }
+
+      for (const seat of finalSeats) {
+        // If useLockFix is true OR if we are simulating deadlock, acquire UPDLOCK
+        if (useLockFix || scenario === 'deadlock') {
           await transaction.request()
             .input("showtimeId", sql.Int, showtimeId)
             .input("seatNumber", sql.VarChar, seat)
@@ -374,6 +380,11 @@ export class TicketService {
               SELECT SeatId FROM Seat WITH (UPDLOCK, HOLDLOCK)
               WHERE SeatNumber = @seatNumber AND RoomId = (SELECT RoomId FROM Showtime WHERE ShowtimeId = @showtimeId)
             `);
+            
+          // Add a small delay between locking each seat to guarantee the cross-lock (deadlock) happens
+          if (scenario === 'deadlock' && !useLockFix && finalSeats.length > 1) {
+             await new Promise(resolve => setTimeout(resolve, 1000));
+          }
         }
 
         const seatCheck = await transaction.request()

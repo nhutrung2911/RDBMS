@@ -302,7 +302,7 @@ export default function DevPanel({ config, onChangeConfig, logs, onClearLogs }: 
                       console.error("Failed to clear backend tickets:", e);
                     }
                     localStorage.clear();
-                    window.location.reload();
+                    window.location.href = "/";
                   }}
                   className="w-full bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-gray-300 hover:text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 mt-2"
                 >

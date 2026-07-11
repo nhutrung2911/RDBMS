@@ -44,26 +44,28 @@ export function initializeDB() {
     try {
       let storedMovies = JSON.parse(localStorage.getItem("movies_db") || "[]") as Movie[];
       
-      // Filter out stored movies with IDs <= 8 that don't match the title of the static movie (collisions)
-      storedMovies = storedMovies.filter((m) => {
-        const staticM = staticMovies.find((sm) => sm.id === m.id);
-        if (staticM) {
-          return staticM.title === m.title;
-        }
-        return true;
-      });
+      if (localStorage.getItem("backend_synced") !== "true") {
+        // Filter out stored movies that don't match the title of the static movie (collisions)
+        storedMovies = storedMovies.filter((m) => {
+          const staticM = staticMovies.find((sm) => sm.id === m.id);
+          if (staticM) {
+            return staticM.title === m.title;
+          }
+          return true;
+        });
 
-      const updatedMovies = storedMovies.map((m: any) => {
-        const staticMovie = staticMovies.find((sm) => sm.id === m.id);
-        if (staticMovie) {
-          return { ...m, releaseDate: staticMovie.releaseDate };
-        }
-        return m;
-      });
-      const missingStaticMovies = staticMovies.filter(
-        (sm) => !storedMovies.some((m) => m.id === sm.id)
-      );
-      localStorage.setItem("movies_db", JSON.stringify([...updatedMovies, ...missingStaticMovies]));
+        const updatedMovies = storedMovies.map((m: any) => {
+          const staticMovie = staticMovies.find((sm) => sm.id === m.id);
+          if (staticMovie) {
+            return { ...m, releaseDate: staticMovie.releaseDate };
+          }
+          return m;
+        });
+        const missingStaticMovies = staticMovies.filter(
+          (sm) => !storedMovies.some((m) => m.id === sm.id)
+        );
+        localStorage.setItem("movies_db", JSON.stringify([...updatedMovies, ...missingStaticMovies]));
+      }
     } catch (e) {
       localStorage.setItem("movies_db", JSON.stringify(staticMovies));
     }
@@ -76,33 +78,37 @@ export function initializeDB() {
     try {
       let parsed = JSON.parse(storedShowtimesStr) as Showtime[];
       
-      // Filter out parsed showtimes with IDs <= 17 that don't match the static showtime's movieId (collisions)
-      parsed = parsed.filter((s) => {
-        const staticSt = staticShowtimes.find((st) => st.id === s.id);
-        if (staticSt) {
-          return staticSt.movieId === s.movieId;
-        }
-        return true;
-      });
+      if (localStorage.getItem("backend_synced") === "true") {
+        showtimes = parsed;
+      } else {
+        // Filter out parsed showtimes that don't match the static showtime's movieId (collisions)
+        const filtered = parsed.filter((s) => {
+          const staticSt = staticShowtimes.find((st) => st.id === s.id);
+          if (staticSt) {
+            return staticSt.movieId === s.movieId;
+          }
+          return true;
+        });
 
-      const updatedExisting = parsed.map((s: any) => {
-        const staticSt = staticShowtimes.find((st) => st.id === s.id);
-        if (staticSt) {
-          return {
-            ...s,
-            date: staticSt.date
-          };
-        } else {
-          return {
-            ...s,
-            date: s.date && s.date.includes("-") ? s.date : day0
-          };
-        }
-      });
-      const missingStatic = staticShowtimes.filter(
-        (st) => !parsed.some((s) => s.id === st.id)
-      );
-      showtimes = [...updatedExisting, ...missingStatic];
+        const updatedExisting = filtered.map((s: any) => {
+          const staticSt = staticShowtimes.find((st) => st.id === s.id);
+          if (staticSt) {
+            return {
+              ...s,
+              date: staticSt.date
+            };
+          } else {
+            return {
+              ...s,
+              date: s.date && s.date.includes("-") ? s.date : day0
+            };
+          }
+        });
+        const missingStatic = staticShowtimes.filter(
+          (st) => !filtered.some((s) => s.id === st.id)
+        );
+        showtimes = [...updatedExisting, ...missingStatic];
+      }
     } catch {
       showtimes = staticShowtimes;
     }
@@ -404,9 +410,12 @@ export async function syncWithBackend(): Promise<boolean> {
     }
 
     console.log("Synchronized successfully with SQL Server!");
+    localStorage.setItem("backend_synced", "true");
+    window.dispatchEvent(new Event('db_synced'));
     return true;
   } catch (err: any) {
     console.error("Failed to sync with backend database:", err.message);
+    localStorage.removeItem("backend_synced");
     return false;
   }
 }
