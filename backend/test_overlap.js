@@ -9,8 +9,9 @@ const config = {
 async function run() { 
   const pool = await sql.connect(config); 
   try { 
-    const res = await pool.request().query("SELECT name, object_definition(object_id) as definition FROM sys.triggers");
-    console.log("TRIGGERS:", res.recordset);
+    // CinemaId 3 (Landmark 81) has RoomId 6 and 7
+    const res = await pool.request().query("SELECT * FROM Showtime WHERE MovieId=1 AND RoomId IN (6, 7)");
+    console.log("SHOWTIMES FOR LANDMARK 81:", res.recordset);
   } catch(e) {
     console.error(e);
   } finally {

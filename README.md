@@ -1,149 +1,135 @@
-# TỔNG QUAN CẤU TRÚC THƯ MỤC DỰ ÁN
+# 🎬 CINESTAR - HỆ THỐNG ĐẶT VÉ XEM PHIM & MÔ PHỎNG TƯƠNG TRANH CSDL
 
-Tài liệu này mô tả chi tiết cấu trúc thư mục toàn bộ dự án **Hệ thống Quản lý Đặt vé Xem phim CineStar**, tích hợp cơ chế Giả lập & Điều khiển Tương tranh. Kiến trúc dự án được xây dựng theo mô hình phát triển Web hiện đại, phân tách rõ ràng giữa **Frontend (React)**, **Backend (Node.js API)** và **Database (SQL Server)**.
+Dự án xây dựng ứng dụng đặt vé xem phim trực tuyến kết hợp bảng điều khiển mô phỏng và xử lý 5 hiện tượng tranh chấp đồng thời (Concurrency Conflicts) trong Hệ quản trị Cơ sở dữ liệu SQL Server: **Lost Update**, **Dirty Read**, **Non-repeatable Read**, **Phantom Read** và **Deadlock**.
 
 ---
 
-## 1. Cấu trúc Tổng thể Dự án (Project Root)
+## 👨‍💻 Đóng góp cá nhân (Personal Contributions)
 
-Dự án được tổ chức thành hai phân hệ độc lập (Client và Server) kết hợp với các kịch bản cài đặt Cơ sở dữ liệu:
+Trong dự án CineStar, tôi tập trung vào **Phân tích hệ thống, Thiết kế cơ sở dữ liệu và Phát triển giao diện người dùng**, đồng thời tham gia tích hợp Frontend với Backend để hoàn thiện luồng đặt vé.
+
+| Hạng mục | Công việc thực hiện | Công nghệ / Công cụ |
+|---|---|---|
+| **Phân tích hệ thống** | Phân tích yêu cầu, xác định chức năng chính và mô hình hóa các luồng nghiệp vụ đặt vé xem phim. | System Analysis, Use Case, User Flow |
+| **Thiết kế cơ sở dữ liệu** | Phân tích dữ liệu nghiệp vụ, xây dựng cấu trúc bảng và xác định mối quan hệ giữa các thực thể. | SQL Server, ERD, T-SQL |
+| **Phát triển Frontend** | Xây dựng và hoàn thiện giao diện các trang phim, chi tiết phim, chọn ghế, xác nhận đặt vé và giao diện quản trị. | React, TypeScript, Tailwind CSS |
+| **Tích hợp Frontend – Backend** | Phối hợp kết nối giao diện với API, xử lý dữ liệu trả về và hoàn thiện luồng tương tác giữa người dùng với hệ thống. | REST API, Node.js, Express.js |
+| **Xử lý nghiệp vụ đặt vé** | Tham gia hoàn thiện luồng chọn ghế và đặt vé, chú trọng việc kiểm tra trạng thái ghế và hạn chế xung đột khi nhiều giao dịch diễn ra đồng thời. | SQL Server, Transaction, Concurrency Control |
+| **Kiểm thử và kiểm tra lỗi** | Kiểm tra luồng chức năng, đối chiếu dữ liệu giữa giao diện và Backend, phối hợp sửa lỗi trong quá trình tích hợp. | Manual Testing, API Testing |
+
+> *Lưu ý: Chỉ giữ lại những công việc mà bạn thực sự trực tiếp thực hiện hoặc có tham gia. Có thể điều chỉnh nội dung từng dòng để phản ánh chính xác phạm vi đóng góp cá nhân.*
+
+---
+
+## 🧰 Công nghệ sử dụng
+
+| Thành phần | Công nghệ | Vai trò |
+|---|---|---|
+| Frontend | React, Vite, TypeScript, Tailwind CSS | Xây dựng giao diện người dùng |
+| Backend | Node.js, Express.js | Xây dựng API và xử lý nghiệp vụ |
+| Database | Microsoft SQL Server, T-SQL | Lưu trữ và xử lý dữ liệu |
+| API | REST API | Trao đổi dữ liệu giữa Frontend và Backend |
+| Kiểm thử | Manual Testing | Kiểm tra luồng chức năng và phản hồi từ hệ thống |
+| Quản lý mã nguồn | Git, GitHub | Quản lý phiên bản và phối hợp phát triển |
+
+---
+
+## 🎯 Mục tiêu và phạm vi chức năng
+
+| Nhóm chức năng | Nội dung |
+|---|---|
+| **Người dùng** | Đăng nhập, đăng ký và quản lý thông tin tài khoản theo phạm vi triển khai |
+| **Tra cứu phim** | Xem danh sách phim, thông tin chi tiết và lịch chiếu |
+| **Đặt vé** | Chọn suất chiếu, chọn ghế và thực hiện quy trình đặt vé |
+| **Quản lý** | Quản lý dữ liệu và theo dõi thông tin theo quyền được cấp |
+| **Báo cáo** | Truy vấn dữ liệu phục vụ thống kê và báo cáo doanh thu |
+| **Mô phỏng tương tranh** | Quan sát các tình huống giao dịch đồng thời, mức cô lập và phương án hạn chế xung đột |
+
+---
+
+## 🗄️ Thiết kế cơ sở dữ liệu
+
+| Bảng dữ liệu | Vai trò |
+|---|---|
+| `Category` | Lưu thông tin thể loại phim |
+| `Movie` | Lưu thông tin phim |
+| `Showtime` | Quản lý lịch chiếu |
+| `Seat` | Lưu thông tin ghế |
+| `Customer` | Lưu thông tin khách hàng |
+| `Ticket` | Lưu thông tin vé |
+| `TicketDetail` | Lưu thông tin chi tiết vé |
+
+### Các đối tượng SQL tiêu biểu
+
+| Đối tượng | Tên | Mục đích |
+|---|---|---|
+| View | `v_ShowtimeSeats` | Truy vấn thông tin suất chiếu và ghế |
+| View | `v_RevenueByMovie` | Tổng hợp dữ liệu doanh thu theo phim |
+| Function | `fn_CountEmptySeats` | Hỗ trợ đếm số ghế còn trống |
+| Function | `fn_CalculateInvoice` | Hỗ trợ tính toán hóa đơn |
+| Stored Procedure | `usp_GetRevenueReport` | Truy vấn dữ liệu báo cáo doanh thu |
+| Stored Procedure | `usp_BookTicket_Conflict` | Phục vụ kịch bản đặt vé có nguy cơ xung đột |
+| Stored Procedure | `usp_BookTicket_Fixed` | Phục vụ kịch bản đặt vé đã áp dụng phương án xử lý xung đột |
+| Trigger | `trg_PreventDoubleBooking` | Hỗ trợ kiểm soát việc đặt trùng ghế |
+| Trigger | `trg_ShowtimeOverlapCheck` | Kiểm tra điều kiện liên quan đến lịch chiếu |
+
+---
+
+## ⚙️ Các vấn đề tương tranh cơ sở dữ liệu
+
+| Vấn đề | Mô tả | Hướng xử lý / nghiên cứu |
+|---|---|---|
+| Lost Update | Các giao dịch cập nhật dữ liệu có thể ghi đè kết quả của nhau. | Kiểm soát giao dịch và khóa dữ liệu phù hợp |
+| Dirty Read | Một giao dịch đọc dữ liệu chưa được giao dịch khác xác nhận. | Sử dụng mức cô lập phù hợp |
+| Non-repeatable Read | Cùng một truy vấn có thể đọc được giá trị khác nhau trong một giao dịch. | Điều chỉnh mức cô lập giao dịch |
+| Phantom Read | Truy vấn lặp lại có thể xuất hiện thêm hoặc mất các dòng dữ liệu phù hợp điều kiện lọc. | Lựa chọn mức cô lập và cơ chế khóa phù hợp |
+| Deadlock | Các giao dịch chờ tài nguyên của nhau tạo thành vòng chờ. | Chuẩn hóa thứ tự khóa và điều chỉnh cách thực hiện giao dịch |
+
+---
+
+## 📁 Cấu trúc thư mục dự án
 
 ```text
-FE_RDBMS/
-├── project/                      # Mã nguồn ứng dụng Client (React Frontend)
-├── backend/                      # Mã nguồn máy chủ trung gian (Node.js Backend)
-└── database/                     # Các kịch bản thiết lập Cơ sở dữ liệu (SQL Server)
+RDBMS/
+├── frontend/                     # Mã nguồn ứng dụng Client (React + Vite + TypeScript)
+│   ├── src/
+│   │   ├── components/           # Navbar, Footer, DevPanel (Bảng điều khiển tương tranh)
+│   │   ├── pages/                # HomePage, SeatsPage, BookingConfirmPage, AdminPortalPage...
+│   │   ├── lib/                  # db.ts (Lớp truy cập dữ liệu giả lập/đồng bộ khóa)
+│   │   ├── App.tsx               # Quản lý State toàn cục & định tuyến
+│   │   └── main.tsx              # Điểm khởi chạy ứng dụng
+│   └── package.json
+├── backend/                      # Mã nguồn máy chủ trung gian (Node.js + Express)
+│   ├── src/
+│   │   ├── config/database.ts    # Cấu hình Pool Connection kết nối SQL Server
+│   │   ├── controllers/          # Điều phối luồng nghiệp vụ & tương tranh
+│   │   ├── middlewares/          # Bắt lỗi & thiết lập Isolation Level
+│   │   ├── routes/               # Định nghĩa các cổng API
+│   │   └── services/             # Tầng truy xuất dữ liệu (Data Access Layer - DAL)
+│   └── package.json
+└── database/                     # Kịch bản T-SQL khởi tạo Database, Table, SP, Trigger
+    └── CineStar_Database_Setup.sql
 ```
 
 ---
 
-## 2. Chi Tiết Phân Hệ Frontend (Client-side / React App)
+## 🚀 Hướng dẫn cài đặt & Khởi chạy
 
-Frontend được viết bằng **React + Vite + TypeScript** và CSS thông qua **Tailwind CSS**. Thư mục chính tập trung ở `project/src/`:
+### 1. Cơ sở dữ liệu (SQL Server)
+- Mở **SQL Server Management Studio (SSMS)**.
+- Mở và thực thi script `database/CineStar_Database_Setup.sql` để khởi tạo database, bảng, dữ liệu mẫu, trigger và các stored procedure.
 
-```text
-project/src/
-├── components/                   # Các thành phần giao diện dùng chung
-│   ├── DevPanel.tsx              # Bảng điều khiển tương tranh nổi (Dev Control & SQL Console)
-│   ├── Navbar.tsx                # Thanh điều hướng đầu trang
-│   └── Footer.tsx                # Thông tin bản quyền chân trang
-├── data/
-│   └── movies.ts                 # Dữ liệu tĩnh dự phòng về Phim, Rạp và Suất chiếu
-├── lib/
-│   ├── db.ts                     # Lớp Truy cập dữ liệu giả lập (DAL & Lock Registry)
-│   └── supabase.ts               # Lớp xử lý xác thực tài khoản người dùng
-├── pages/                        # Các giao diện nghiệp vụ (Lớp GUI/Presentation)
-│   ├── AuthPage.tsx              # Form Đăng nhập, Đăng ký & Đổi mật khẩu
-│   ├── HomePage.tsx              # Giao diện Trang chủ (Tra cứu danh sách phim đang chiếu)
-│   ├── MovieDetailPage.tsx       # Xem chi tiết phim & Danh sách suất chiếu khả dụng
-│   ├── SeatsPage.tsx             # Sơ đồ chọn ghế ngồi (Kiểm thử Lost Update & Deadlock)
-│   ├── BookingConfirmPage.tsx    # Giao diện quét mã QR thanh toán (Kiểm thử Dirty Read)
-│   └── AdminPortalPage.tsx       # Portal quản lý (Doanh thu: Non-repeatable Read; Suất chiếu: Phantom)
-├── App.tsx                       # Quản lý State toàn cục & Định tuyến trang chính
-├── index.css                     # Cấu hình Style hệ thống
-└── main.tsx                      # Điểm khởi chạy ứng dụng React
+### 2. Backend (Node.js API)
+```bash
+cd backend
+npm install
+npm run dev
 ```
 
-### Mô tả chức năng chính các File ở Frontend:
-* **`App.tsx`**: Nắm giữ trạng thái cấu hình tương tranh toàn cục (`concurrencyConfig`) và mảng chứa nhật ký SQL (`sqlLogs`). Nó truyền các hàm này xuống toàn bộ ứng dụng để điều phối hành vi giao diện.
-* **`lib/db.ts` (Tầng DAL client)**: Chứa bảng `seat_locks_db` lưu ở `localStorage` để đồng bộ trạng thái khóa giữa các tab trình duyệt. Nó cung cấp các hàm API nội bộ như `addSeatLock` (Tương đương lệnh chèn khóa giữ dòng) và `isSeatLocked` (Kiểm tra xem dòng dữ liệu có đang bị khóa hay không).
-* **`components/DevPanel.tsx`**: Bảng điều khiển nổi cho phép thay đổi Isolation Level, bật tắt SP sửa lỗi, cấu hình thời gian trễ. Có màn hình console giả lập output của hệ quản trị CSDL SQL Server.
-* **`pages/SeatsPage.tsx`**: Tích hợp luồng giả lập chạy ngầm của Giao tác B để tạo xung đột đặt trùng ghế (Lost Update) hoặc khóa chéo ghế (Deadlock).
-
----
-
-## 3. Chi Tiết Phân Hệ Backend (Server-side / Node.js API)
-
-Backend đóng vai trò làm lớp trung gian (API Gateway) nhận yêu cầu từ React Frontend, khởi động các Transaction với mức cô lập tương ứng và thực thi mã lệnh trên SQL Server.
-
-```text
-backend/src/
-├── config/
-│   └── database.ts               # Cấu hình Pool Connection kết nối SQL Server (DataProvider)
-├── controllers/                  # Lớp xử lý yêu cầu HTTP và điều phối nghiệp vụ
-│   ├── ticket.controller.ts      # Xử lý luồng đặt vé, bắt lỗi tương tranh (Lost Update, Deadlock)
-│   └── report.controller.ts      # Xử lý truy vấn báo cáo doanh thu với các Isolation Level
-├── middlewares/
-│   ├── concurrency.ts            # Đọc tham số tương tranh từ Header và cấu hình Connection
-│   └── errorHandler.ts           # Bắt lỗi hệ thống & phân loại mã lỗi SQL Server (Ví dụ: Deadlock 1205)
-├── routes/                       # Định nghĩa các cổng API Endpoints
-│   ├── ticket.routes.ts          # Định tuyến các API đặt vé, kiểm tra ghế
-│   └── report.routes.ts          # Định tuyến API thống kê báo cáo doanh thu
-├── services/                     # Tầng truy cập dữ liệu thực tế (DAL ở Backend)
-│   ├── ticket.service.ts         # Gọi Stored Procedure đặt vé có/không có UPDLOCK
-│   └── report.service.ts         # Chạy lệnh T-SQL thống kê doanh thu theo thời gian
-└── app.ts                        # Thiết lập ứng dụng Express, kích hoạt CORS và Middleware
+### 3. Frontend (React + Vite)
+```bash
+cd frontend
+npm install
+npm run dev
 ```
-
-### Mô tả chức năng chính các thành phần ở Backend:
-* **`config/database.ts`**: Tương đương với lớp `DataProvider.cs` trong bài mẫu WinForms. Cấu hình chuỗi kết nối (Connection String) kết nối tới SQL Server sử dụng thư viện `mssql`.
-* **`middlewares/concurrency.ts`**: Đọc các cấu hình từ UI gửi lên. Thực thi lệnh `SET TRANSACTION ISOLATION LEVEL` động trên kết nối SQL hiện hành trước khi chạy nghiệp vụ chính.
-* **`services/` (Tầng DAL thực tế)**: Nơi trực tiếp gọi các câu lệnh SQL hoặc thực thi Stored Procedure. Ví dụ, `ticket.service.ts` sẽ quyết định gọi `USP_BookSeats_Conflict` hay `USP_BookSeats_Fixed` dựa trên yêu cầu từ UI.
-
----
-
-## 4. Chi Tiết Phân Hệ Database (SQL Server / T-SQL)
-
-Tất cả các thực thể dữ liệu và ràng buộc nghiệp vụ được cài đặt dưới dạng các bảng vật lý và các đối tượng mã nguồn T-SQL trong SQL Server:
-
-```text
-database/
-├── tables/                       # Kịch bản khởi tạo các bảng vật lý
-│   ├── Category.sql              # Bảng phân loại phim (Hành động, Hài...)
-│   ├── Movie.sql                 # Bảng thông tin chi tiết phim
-│   ├── Showtime.sql              # Bảng quản lý suất chiếu (Giờ chiếu, Phòng chiếu)
-│   ├── Seat.sql                  # Bảng quản lý ghế ngồi theo phòng
-│   ├── Customer.sql              # Bảng lưu trữ thông tin khách hàng
-│   ├── Ticket.sql                # Bảng hóa đơn đặt vé
-│   └── TicketDetail.sql          # Bảng chi tiết vé (Vé đặt cho ghế nào trong suất nào)
-├── views/                        # Các khung nhìn hiển thị thông tin báo cáo
-│   ├── v_ShowtimeSeats.sql       # Khung nhìn hiển thị sơ đồ ghế trống/đã bán
-│   └── v_RevenueByMovie.sql      # Khung nhìn hiển thị doanh thu tổng hợp theo phim
-├── functions/                    # Các hàm tính toán
-│   ├── fn_CountEmptySeats.sql    # Hàm đếm số ghế trống của một suất chiếu
-│   └── fn_CalculateInvoice.sql   # Hàm tính tổng tiền hóa đơn đặt vé
-├── store_procedures/             # Các thủ tục xử lý nghiệp vụ & tương tranh
-│   ├── usp_BookTicket_Conflict.sql # SP bán vé cũ (gây ra Lost Update/Deadlock)
-│   ├── usp_BookTicket_Fixed.sql  # SP bán vé mới (sửa lỗi bằng UPDLOCK, HOLDLOCK)
-│   └── usp_GetRevenueReport.sql  # SP thống kê doanh thu phục vụ báo cáo
-└── triggers/                     # Các bẫy lỗi toàn vẹn dữ liệu
-    ├── trg_PreventDoubleBooking.sql # Ngăn chặn ghi đè nếu ghế đã được mua
-    └── trg_ShowtimeOverlapCheck.sql # Ngăn chặn tạo suất chiếu đè khung giờ nhau
-```
-
----
-
-## 5. Mối liên hệ Kiến trúc DTO và DAL trong Cấu trúc Mới
-
-Mô hình 3 lớp trong dự án Web được vận hành theo luồng tuần tự như sau:
-
-```mermaid
-graph TD
-    subgraph Presentation_Layer [Presentation Layer GUI]
-        App.tsx --> Pages[Pages: SeatsPage, AdminPortalPage...]
-        Pages --> Components[Components: DevPanel...]
-    end
-
-    subgraph Data_Transfer_Objects [TypeScript DTOs]
-        DTO_Movie[Movie Interface]
-        DTO_Ticket[BookedTicket Interface]
-        DTO_SeatLock[SeatLock Interface]
-    end
-
-    subgraph Backend_DAL [Data Access Layer]
-        Controllers[Controllers: ticket.controller.ts]
-        Services[Services/DAL: ticket.service.ts]
-        DBConfig[database.ts: Connection Pool]
-    end
-
-    subgraph Database_Layer [Database SQL Server]
-        Tables[Tables: Seat, Ticket]
-        SPs[Stored Procedures: usp_BookTicket]
-    end
-
-    Presentation_Layer -- Gửi/Nhận DTOs --> Controllers
-    Controllers -- Gọi hàm DAL --> Services
-    Services -- Tạo kết nối --> DBConfig
-    DBConfig -- Thực thi SQL --> SPs
-    SPs -- Cập nhật --> Tables
-```
+Truy cập ứng dụng tại `http://localhost:5173`.
