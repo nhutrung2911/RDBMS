@@ -17,7 +17,6 @@ Trong dự án CineStar, tôi tập trung vào **Phân tích hệ thống, Thi�
 | **Xử lý nghiệp vụ đặt vé** | Tham gia hoàn thiện luồng chọn ghế và đặt vé, chú trọng việc kiểm tra trạng thái ghế và hạn chế xung đột khi nhiều giao dịch diễn ra đồng thời. | SQL Server, Transaction, Concurrency Control |
 | **Kiểm thử và kiểm tra lỗi** | Kiểm tra luồng chức năng, đối chiếu dữ liệu giữa giao diện và Backend, phối hợp sửa lỗi trong quá trình tích hợp. | Manual Testing, API Testing |
 
-> *Lưu ý: Chỉ giữ lại những công việc mà bạn thực sự trực tiếp thực hiện hoặc có tham gia. Có thể điều chỉnh nội dung từng dòng để phản ánh chính xác phạm vi đóng góp cá nhân.*
 
 ---
 
