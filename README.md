@@ -90,7 +90,7 @@ Trong dự án CineStar, tôi tập trung vào **Phân tích hệ thống, Thi�
 
 ```text
 RDBMS/
-├── frontend/                     # Mã nguồn ứng dụng Client (React + Vite + TypeScript)
+├── project/                      # Mã nguồn ứng dụng Client (React + Vite + TypeScript)
 │   ├── src/
 │   │   ├── components/           # Navbar, Footer, DevPanel (Bảng điều khiển tương tranh)
 │   │   ├── pages/                # HomePage, SeatsPage, BookingConfirmPage, AdminPortalPage...
@@ -127,7 +127,7 @@ npm run dev
 
 ### 3. Frontend (React + Vite)
 ```bash
-cd frontend
+cd project
 npm install
 npm run dev
 ```
