@@ -197,34 +197,48 @@ export const cinemas: Cinema[] = [
   { id: 6, name: "CGV Vincom Đà Nẵng", address: "910A Ngô Quyền, Q. Sơn Trà", city: "Đà Nẵng" },
 ];
 
-export const showtimes: Showtime[] = [
-  { id: 1, movieId: 1, cinemaId: 1, date: day0, time: "09:30", hall: "Hall 1", type: "imax", availableSeats: 45, totalSeats: 120 },
-  { id: 2, movieId: 1, cinemaId: 1, date: day0, time: "12:15", hall: "Hall 2", type: "standard", availableSeats: 78, totalSeats: 100 },
-  { id: 3, movieId: 1, cinemaId: 1, date: day0, time: "15:00", hall: "Hall 3", type: "4dx", availableSeats: 32, totalSeats: 80 },
-  { id: 4, movieId: 1, cinemaId: 1, date: day0, time: "18:30", hall: "Hall 1", type: "imax", availableSeats: 15, totalSeats: 120 },
-  { id: 5, movieId: 1, cinemaId: 1, date: day0, time: "21:00", hall: "Hall 2", type: "standard", availableSeats: 60, totalSeats: 100 },
-  { id: 6, movieId: 1, cinemaId: 2, date: day1, time: "10:00", hall: "Hall A", type: "standard", availableSeats: 55, totalSeats: 90 },
-  { id: 7, movieId: 1, cinemaId: 2, date: day1, time: "14:30", hall: "Hall B", type: "sweetbox", availableSeats: 12, totalSeats: 30 },
-  { id: 8, movieId: 1, cinemaId: 2, date: day1, time: "19:45", hall: "Hall A", type: "standard", availableSeats: 40, totalSeats: 90 },
-  { id: 9, movieId: 1, cinemaId: 3, date: day2, time: "11:00", hall: "Hall X", type: "imax", availableSeats: 20, totalSeats: 150 },
-  { id: 10, movieId: 1, cinemaId: 3, date: day0, time: "16:00", hall: "Hall Y", type: "4dx", availableSeats: 38, totalSeats: 60 },
-  { id: 11, movieId: 2, cinemaId: 1, date: day0, time: "10:00", hall: "Hall 2", type: "standard", availableSeats: 70, totalSeats: 100 },
-  { id: 12, movieId: 2, cinemaId: 1, date: day1, time: "14:00", hall: "Hall 3", type: "4dx", availableSeats: 25, totalSeats: 80 },
-  { id: 13, movieId: 2, cinemaId: 1, date: day2, time: "17:45", hall: "Hall 1", type: "imax", availableSeats: 50, totalSeats: 120 },
-  { id: 14, movieId: 3, cinemaId: 2, date: day0, time: "09:00", hall: "Hall A", type: "standard", availableSeats: 80, totalSeats: 90 },
-  { id: 15, movieId: 3, cinemaId: 2, date: day1, time: "11:30", hall: "Hall B", type: "standard", availableSeats: 65, totalSeats: 90 },
-  { id: 16, movieId: 3, cinemaId: 1, date: day0, time: "15:30", hall: "Hall 2", type: "standard", availableSeats: 88, totalSeats: 100 },
-  { id: 17, movieId: 3, cinemaId: 1, date: day1, time: "16:45", hall: "Hall 3", type: "standard", availableSeats: 70, totalSeats: 100 },
-  { id: 18, movieId: 4, cinemaId: 4, date: day0, time: "14:00", hall: "Hall I", type: "standard", availableSeats: 120, totalSeats: 120 },
-  { id: 19, movieId: 4, cinemaId: 4, date: day1, time: "16:30", hall: "Hall II", type: "standard", availableSeats: 120, totalSeats: 120 },
-  { id: 20, movieId: 4, cinemaId: 5, date: day0, time: "19:00", hall: "Hall Alpha", type: "standard", availableSeats: 120, totalSeats: 120 },
-  { id: 21, movieId: 4, cinemaId: 6, date: day1, time: "20:00", hall: "Hall Gold", type: "standard", availableSeats: 120, totalSeats: 120 },
-  { id: 22, movieId: 5, cinemaId: 4, date: day0, time: "11:15", hall: "Hall II", type: "standard", availableSeats: 120, totalSeats: 120 },
-  { id: 23, movieId: 5, cinemaId: 5, date: day1, time: "13:30", hall: "Hall Beta", type: "standard", availableSeats: 120, totalSeats: 120 },
-  { id: 24, movieId: 5, cinemaId: 6, date: day0, time: "15:45", hall: "Hall Silver", type: "standard", availableSeats: 120, totalSeats: 120 },
-  { id: 25, movieId: 5, cinemaId: 1, date: day2, time: "18:00", hall: "Hall 2", type: "standard", availableSeats: 120, totalSeats: 120 },
-];
+export function generateShowtimes(): Showtime[] {
+  const list: Showtime[] = [];
+  let idCounter = 1;
+  const movies = [1, 2, 3, 4, 5];
+  const cinemaConfigs = [
+    { cinemaId: 1, hall: "Hall 1", type: "imax" as const, times: ["09:30", "15:00", "20:30"], totalSeats: 120 },
+    { cinemaId: 1, hall: "Hall 2", type: "standard" as const, times: ["12:15", "18:15", "22:00"], totalSeats: 100 },
+    { cinemaId: 1, hall: "Hall 3", type: "4dx" as const, times: ["10:45", "16:30"], totalSeats: 80 },
+    { cinemaId: 2, hall: "Hall A", type: "standard" as const, times: ["10:00", "14:30", "19:45"], totalSeats: 90 },
+    { cinemaId: 2, hall: "Hall B", type: "sweetbox" as const, times: ["11:30", "17:00", "21:30"], totalSeats: 40 },
+    { cinemaId: 3, hall: "Hall X", type: "imax" as const, times: ["11:00", "16:00", "21:15"], totalSeats: 150 },
+    { cinemaId: 3, hall: "Hall Y", type: "4dx" as const, times: ["13:30", "18:45"], totalSeats: 70 },
+  ];
 
+  for (let dayOffset = 0; dayOffset <= 13; dayOffset++) {
+    const date = getLocalDateString(dayOffset);
+    for (const movieId of movies) {
+      for (let cIdx = 0; cIdx < cinemaConfigs.length; cIdx++) {
+        if ((cIdx + movieId + dayOffset) % 2 === 0) {
+          const cfg = cinemaConfigs[cIdx];
+          for (const time of cfg.times) {
+            const booked = (movieId * 11 + dayOffset * 7 + time.charCodeAt(0) + time.charCodeAt(1)) % 35;
+            list.push({
+              id: idCounter++,
+              movieId,
+              cinemaId: cfg.cinemaId,
+              date,
+              time,
+              hall: cfg.hall,
+              type: cfg.type,
+              availableSeats: Math.max(15, cfg.totalSeats - booked),
+              totalSeats: cfg.totalSeats
+            });
+          }
+        }
+      }
+    }
+  }
+  return list;
+}
+
+export const showtimes: Showtime[] = generateShowtimes();
 
 export const TICKET_PRICES: Record<string, number> = {
   standard: 90000,

@@ -32,13 +32,57 @@ export interface SeatLock {
 // In-Memory Mock Database
 export let mockTickets: BookedTicket[] = [];
 export let mockSeatLocks: SeatLock[] = [];
-export let mockShowtimes = [
-  { id: 1, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "09:30", hall: "Hall 1", type: "imax" as const, availableSeats: 45, totalSeats: 120 },
-  { id: 2, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "12:15", hall: "Hall 2", type: "standard" as const, availableSeats: 78, totalSeats: 100 },
-  { id: 3, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "15:00", hall: "Hall 3", type: "4dx" as const, availableSeats: 32, totalSeats: 80 },
-  { id: 4, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "18:30", hall: "Hall 1", type: "imax" as const, availableSeats: 15, totalSeats: 120 },
-  { id: 5, movieId: 1, cinemaId: 1, date: "2026-06-01", time: "21:00", hall: "Hall 2", type: "standard" as const, availableSeats: 60, totalSeats: 100 },
-];
+function getLocalDateString(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function generateRealtimeShowtimes() {
+  const list: any[] = [];
+  let idCounter = 1;
+  const movies = [1, 2, 3, 4, 5];
+  const cinemaConfigs = [
+    { cinemaId: 1, hall: "Hall 1", type: "imax" as const, times: ["09:30", "15:00", "20:30"], totalSeats: 120 },
+    { cinemaId: 1, hall: "Hall 2", type: "standard" as const, times: ["12:15", "18:15", "22:00"], totalSeats: 100 },
+    { cinemaId: 1, hall: "Hall 3", type: "4dx" as const, times: ["10:45", "16:30"], totalSeats: 80 },
+    { cinemaId: 2, hall: "Hall A", type: "standard" as const, times: ["10:00", "14:30", "19:45"], totalSeats: 90 },
+    { cinemaId: 2, hall: "Hall B", type: "sweetbox" as const, times: ["11:30", "17:00", "21:30"], totalSeats: 40 },
+    { cinemaId: 3, hall: "Hall X", type: "imax" as const, times: ["11:00", "16:00", "21:15"], totalSeats: 150 },
+    { cinemaId: 3, hall: "Hall Y", type: "4dx" as const, times: ["13:30", "18:45"], totalSeats: 70 },
+  ];
+
+  for (let dayOffset = 0; dayOffset <= 13; dayOffset++) {
+    const date = getLocalDateString(dayOffset);
+    for (const movieId of movies) {
+      for (let cIdx = 0; cIdx < cinemaConfigs.length; cIdx++) {
+        if ((cIdx + movieId + dayOffset) % 2 === 0) {
+          const cfg = cinemaConfigs[cIdx];
+          for (const time of cfg.times) {
+            const booked = (movieId * 9 + dayOffset * 7 + time.charCodeAt(1)) % 35;
+            list.push({
+              id: idCounter++,
+              movieId,
+              cinemaId: cfg.cinemaId,
+              date,
+              time,
+              hall: cfg.hall,
+              type: cfg.type,
+              availableSeats: Math.max(15, cfg.totalSeats - booked),
+              totalSeats: cfg.totalSeats
+            });
+          }
+        }
+      }
+    }
+  }
+  return list;
+}
+
+export let mockShowtimes = generateRealtimeShowtimes();
 
 export class TicketService {
   async getAllTickets(): Promise<BookedTicket[]> {
@@ -106,6 +150,10 @@ export class TicketService {
 
   async getShowtimes(): Promise<any[]> {
     if (getMockMode()) {
+      const today = getLocalDateString(0);
+      if (!mockShowtimes.some((s: any) => s.date === today)) {
+        mockShowtimes = generateRealtimeShowtimes();
+      }
       return mockShowtimes;
     }
 

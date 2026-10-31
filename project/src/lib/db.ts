@@ -71,47 +71,25 @@ export function initializeDB() {
     }
   }
 
-  // Always sync showtime dates with dynamic dates (day0, day1, day2) and merge missing static showtimes (with self-healing for ID collisions)
+  // Check if showtimes in localStorage contain today. If outdated, auto-refresh!
   let showtimes = staticShowtimes;
   const storedShowtimesStr = localStorage.getItem("showtimes_db");
+  let hasValidToday = false;
   if (storedShowtimesStr) {
     try {
-      let parsed = JSON.parse(storedShowtimesStr) as Showtime[];
-      
-      if (localStorage.getItem("backend_synced") === "true") {
+      const parsed = JSON.parse(storedShowtimesStr) as Showtime[];
+      if (Array.isArray(parsed) && parsed.some(s => s.date === day0)) {
+        hasValidToday = true;
         showtimes = parsed;
-      } else {
-        // Filter out parsed showtimes that don't match the static showtime's movieId (collisions)
-        const filtered = parsed.filter((s) => {
-          const staticSt = staticShowtimes.find((st) => st.id === s.id);
-          if (staticSt) {
-            return staticSt.movieId === s.movieId;
-          }
-          return true;
-        });
-
-        const updatedExisting = filtered.map((s: any) => {
-          const staticSt = staticShowtimes.find((st) => st.id === s.id);
-          if (staticSt) {
-            return {
-              ...s,
-              date: staticSt.date
-            };
-          } else {
-            return {
-              ...s,
-              date: s.date && s.date.includes("-") ? s.date : day0
-            };
-          }
-        });
-        const missingStatic = staticShowtimes.filter(
-          (st) => !filtered.some((s) => s.id === st.id)
-        );
-        showtimes = [...updatedExisting, ...missingStatic];
       }
     } catch {
-      showtimes = staticShowtimes;
+      hasValidToday = false;
     }
+  }
+
+  if (!hasValidToday) {
+    showtimes = staticShowtimes;
+    localStorage.removeItem("backend_synced");
   }
   localStorage.setItem("showtimes_db", JSON.stringify(showtimes));
 
@@ -390,7 +368,10 @@ export async function syncWithBackend(): Promise<boolean> {
     // 1. Sync showtimes
     const showtimes = await getShowtimesAPI();
     if (showtimes && showtimes.length > 0) {
-      localStorage.setItem("showtimes_db", JSON.stringify(showtimes));
+      const today = getLocalDateString(0);
+      if (showtimes.some((s: any) => s.date === today)) {
+        localStorage.setItem("showtimes_db", JSON.stringify(showtimes));
+      }
     }
 
     // 2. Sync tickets
